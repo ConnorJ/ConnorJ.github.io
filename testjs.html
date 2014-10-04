@@ -1,0 +1,31 @@
+<html xmlns="http://www/w3.org/1999/xhtml">
+<head>
+	<title></title>
+<style type="text/css">
+#Text1
+{ 
+height: 30px;
+width: 200Px;
+}
+</style>
+
+<script>
+var x;
+x=window.open();
+x.document.write("<head></head><body><form><input id='Text1' type=text /></form></body></html>");
+
+function Write()
+{
+x.document.forms[0].elements[0].value = document.forms[0].elements[0].value;
+}
+
+</script>
+
+
+</head>
+<body>
+<form>
+<input id="Text1" type=text onKeyup="Write()"/>
+</form>
+</body>
+</html>
