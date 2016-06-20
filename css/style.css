@@ -11,7 +11,7 @@ html, body {
   margin-bottom: 40px;
 }
 .bg1 {
-  background-image: url('../pic/iowa_state_campus.png');
+  background-image: url('../pic/penn_state_campus4.png');
   background-repeat: no-repeat;
   background-position: center center;
   background-size: auto 100%;
@@ -21,15 +21,15 @@ html, body {
 }
 #headerblob {
   position: absolute;
-  left: 20%;
-  top: 5px;
+  left: 30%;
+  top: 25px;
   width: 60%;
 }
 #headertext {
   font-size: 26px;
   font-weight: 400;
-  margin-top: 50px;
-  margin-left: 220px;
+  margin-top: 20px;
+  margin-left: 275px;
 }
 .imgme {
   border: 3px solid white;
