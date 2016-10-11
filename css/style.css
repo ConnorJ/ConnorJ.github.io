@@ -118,7 +118,7 @@ li {
   .timelineitem {
     width: 50%;
     position: relative;
-    padding: 20px;
+    padding: 5px;
   }
   .timelineitem:nth-child(odd):before {
    left: -8px;
