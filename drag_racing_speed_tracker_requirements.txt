@@ -1,0 +1,145 @@
+DRAG RACING SPEED TRACKER - REQUIREMENTS DOCUMENT
+========================================================
+
+OVERVIEW:
+Create a single HTML file web application for mobile browsers that tracks drag racing performance metrics using device sensors. The tool should work optimally on smartphones mounted in vehicles during drag racing runs.
+
+CORE PERFORMANCE METRICS TO TRACK:
+=================================
+
+Speed-based metrics (both KPH and MPH):
+- 0 - 40 kph 
+- 0 - 60 kph 
+- 0 - 80 kph 
+- 0 - 100 kph 
+- 0 - 120 kph (only show if reaching that speed)
+- 0 - 200 kph (only show if reaching that speed)
+- 0 - 30 mph 
+- 0 - 60 mph 
+- 60 - 100 mph (only show if reaching that speed)
+- 0 - 100 mph (only show if reaching that speed)
+- 0 - 150 mph (only show if reaching that speed)
+
+Distance-based metrics:
+- 1000 meters (target: 22.6s)
+- Est. 1/8 mile (target: 8.7s @ 97.6 mph)
+- 1/4 mile (target: 11.9s @ 116.2 mph)
+- 1 mile (target: 30.9s @ 161.6 mph) (only show if reaching that speed)
+
+UNIT SYSTEM:
+===========
+- Toggle button at top of page to switch between Kilometers (KPH/meters) and Miles (MPH/feet)
+- All metrics should dynamically update when toggling units
+- Default to user's locale/region preference if detectable
+
+BROWSER COMPATIBILITY & SENSORS:
+===============================
+- Primary support: Chrome, Safari, Firefox on mobile devices
+- Use highest available sensor sampling rate (target 100Hz minimum)
+- Prioritize LinearAccelerationSensor API when available (most accurate)
+- Fallback to DeviceMotionEvent for broader compatibility
+- Display warning messages for browsers with known limitations:
+  * "Firefox may have reduced sensor accuracy"
+  * "Older Safari versions may have lower sampling rates"
+- Auto-detect and use the most accurate sensor configuration available
+
+SENSOR CALIBRATION & SETUP:
+==========================
+- Auto-request sensor permissions on page load
+- Show "Grant Sensor Access" button if permissions denied, remove when granted
+- "Reset Sensor" button to recalibrate for phone orientation/mounting
+- Automatic gravity compensation regardless of phone mounting angle
+- Calibration procedure: hold phone still for 2-3 seconds to establish baseline
+- Visual feedback during calibration process
+
+REAL-TIME VISUALIZATION:
+=======================
+Live updating chart displaying:
+- Speed (MPH/KPH) vs Time (primary axis)
+- Acceleration vs Time (secondary axis)
+- Height/Elevation vs Time (secondary axis)
+- Chart should only start recording when vehicle begins moving (>2 mph/3 kph threshold)
+- Smooth, responsive updates at sensor sampling rate
+- Clear gridlines and axis labels
+- Different colors for each metric line
+
+USER INTERFACE REQUIREMENTS:
+===========================
+- Large, readable fonts for use while driving/racing
+- High contrast colors for outdoor visibility
+- Portrait and landscape orientation support
+- Touch-friendly button sizes (minimum 44px)
+- Status indicators for:
+  * Sensor connection status
+  * Current sampling rate (Hz display)
+  * Calibration status
+  * Current run state (standby/recording/complete)
+
+RUN MANAGEMENT:
+==============
+- Automatic run detection (starts when movement detected)
+- Manual start/stop controls
+- Run history storage (last 10 runs minimum)
+- Export capabilities for run data
+- Reset all metrics button
+- Individual metric reset capabilities
+
+DATA ACCURACY & VALIDATION:
+==========================
+- Noise filtering and smoothing algorithms
+- Outlier detection and correction
+- GPS integration as secondary validation source (if available)
+- Display confidence level/accuracy indicators
+- Handle sensor drift correction
+
+ADDITIONAL SAFETY & USABILITY FEATURES:
+======================================
+- Screen always-on mode during active runs
+- Audio feedback for key milestones (60mph, 1/4 mile, etc.)
+- Vibration alerts for important events
+- Warning about safe phone mounting before use
+- Disclaimer about racing safety and legal use
+- Battery optimization to prevent overheating during long sessions
+
+PERFORMANCE OPTIMIZATIONS:
+=========================
+- Efficient memory management for continuous sensor data
+- Smooth animations even at high data rates
+- Minimal DOM updates to maintain 60fps
+- Background processing for calculations
+- Progressive loading of chart data
+
+TECHNICAL IMPLEMENTATION NOTES:
+==============================
+- Single HTML file with embedded CSS and JavaScript
+- No external dependencies (pure vanilla JS)
+- Local storage for settings and run history
+- Service worker for offline functionality (optional)
+- Responsive design for various screen sizes
+- Error handling for sensor failures or permissions issues
+
+DATA EXPORT & SHARING:
+=====================
+- Export run data as CSV/JSON
+- Share run summaries via social media/messaging
+- QR code generation for easy data sharing
+- Cloud backup integration (optional)
+
+VALIDATION & TESTING:
+====================
+- Test with known benchmark vehicles
+- Validate against professional timing equipment
+- Cross-platform compatibility testing
+- Performance testing under various mounting conditions
+- Battery life impact assessment
+
+FUTURE ENHANCEMENT CONSIDERATIONS:
+================================
+- Integration with popular racing apps
+- Vehicle profile presets (different car configurations)
+- Weather condition tracking
+- Track/location detection via GPS
+- Telemetry data logging
+- Professional racing mode with additional metrics
+- Multi-run session analysis
+- Drag strip database integration 
