@@ -1,0 +1,161 @@
+<!-- stripped head/style identical to prior example -->
+<body>
+    <h1>0-60 Speed Timer</h1>
+    
+    <div id="speed">0 mph</div>
+    <div id="timer">0-60: —</div>
+    <div id="hz">sampling: — Hz</div>
+    
+    <select id="axisSel">
+      <option value="auto">Axis (auto)</option><option value="x">X</option>
+      <option value="y">Y</option><option value="z">Z</option>
+    </select>
+    <button id="calBtn">Calibrate</button>
+    <button id="startBtn">Start</button>
+    <button id="resetBtn" disabled>Reset</button>
+    
+    <p id="status" style="font-size:.9rem;color:#666"></p>
+    <!-- notice paragraph unchanged -->
+    
+    <script>
+    (() => {
+      const $ = id => document.getElementById(id);
+      const axisSel=$('axisSel'), calBtn=$('calBtn'),
+            startBtn=$('startBtn'), resetBtn=$('resetBtn'),
+            speedEl=$('speed'), timerEl=$('timer'),
+            hzEl=$('hz'), statusEl=$('status');
+    
+      /* state */
+      let sensor=null,useGS='LinearAccelerationSensor'in window;
+      let v=0,t0=null,reached60=false,lastT=null,idleMs=0;
+      let sampleCt=0,startHzT=0;
+      let bias={x:0,y:0,z:0},haveBias=false;
+      let calibBuf=[],calibActive=false,calibStart=0;
+    
+      const alpha=.85, varThresh=.05, calibWinMs=1000, calibTimeout=5000;
+    
+      const mps2mph=m=>m*2.23694, now=()=>performance.now();
+    
+      /* ---------- main helpers ---------- */
+      function reset(){
+        v=0;t0=null;reached60=false;lastT=null;idleMs=0;
+        speedEl.textContent='0 mph';timerEl.textContent='0-60: —';
+        hzEl.textContent='sampling: — Hz';statusEl.textContent='';
+        haveBias=false;bias={x:0,y:0,z:0};stopSensor();
+        startBtn.disabled=false;resetBtn.disabled=true;
+      }
+    
+      /* ---------- auto-calibration ---------- */
+      calBtn.onclick=()=>{
+        if(!sensor){alert('Start sensor first');return;}
+        calibBuf=[];calibActive=true;calibStart=now();
+        statusEl.textContent='Calibrating… hold still';
+      };
+    
+      function tryCalibrate(){
+        // need >= calibWinMs of data
+        const oldest=calibBuf[0]?.t, newest=calibBuf.at(-1)?.t;
+        if(!oldest||newest-oldest<calibWinMs) return false;
+    
+        const mags=calibBuf.map(d=>d.mag);
+        const mean=mags.reduce((s,v)=>s+v,0)/mags.length;
+        const variance=mags.reduce((s,v)=>s+Math.pow(v-mean,2),0)/mags.length;
+    
+        if(variance<varThresh){
+          // compute mean vector components
+          const ax=calibBuf.reduce((s,d)=>s+d.x,0)/mags.length;
+          const ay=calibBuf.reduce((s,d)=>s+d.y,0)/mags.length;
+          const az=calibBuf.reduce((s,d)=>s+d.z,0)/mags.length;
+          bias={x:ax,y:ay,z:az};haveBias=true;
+          calibActive=false;statusEl.textContent='Calibrated';
+          return true;
+        }
+        // drop oldest sample to slide window
+        calibBuf.shift();
+        return false;
+      }
+    
+      /* ---------- sensor plumbing ---------- */
+      startBtn.onclick=async()=>{
+        try{
+          if(typeof DeviceMotionEvent?.requestPermission==='function'){
+            const res=await DeviceMotionEvent.requestPermission();
+            if(res!=='granted') throw new Error('Motion permission denied');
+          }
+          startSensor();
+        }catch(e){alert(e.message);}
+      };
+      resetBtn.onclick=reset;
+    
+      function startSensor(){
+        if(useGS){
+          try{
+            sensor=new LinearAccelerationSensor({frequency:100});
+            sensor.addEventListener('reading',onFrame);
+            sensor.start();
+          }catch{useGS=false;}
+        }
+        if(!useGS) window.addEventListener('devicemotion',onDM);
+        startBtn.disabled=true;resetBtn.disabled=false;
+      }
+      function stopSensor(){
+        if(useGS&&sensor){sensor.stop();sensor.removeEventListener('reading',onFrame);}
+        window.removeEventListener('devicemotion',onDM);sensor=null;
+      }
+      function onDM(e){
+        if(!e.accelerationIncludingGravity) return;
+        onFrame({x:e.accelerationIncludingGravity.x,
+                 y:e.accelerationIncludingGravity.y,
+                 z:e.accelerationIncludingGravity.z,
+                 t:e.timeStamp});
+      }
+      function onFrame(src){
+        const t=src.t||now(), ax=src.x, ay=src.y, az=src.z;
+        /* Hz tracking */
+        if(sampleCt===0) startHzT=t;
+        if(++sampleCt===100){
+          hzEl.textContent=`sampling: ${(100/((t-startHzT)/1000)).toFixed(0)} Hz`;
+          sampleCt=0;
+        }
+        /* auto-calibration collect */
+        const mag=Math.hypot(ax,ay,az);
+        if(calibActive){
+          calibBuf.push({x:ax,y:ay,z:az,mag:mag,t:t});
+          if(tryCalibrate()) return;
+          if(t-calibStart>calibTimeout){
+            calibActive=false;statusEl.textContent='Calibrate failed—try again';
+          }
+          return; // skip velocity update during calibration
+        }
+        /* bias removal */
+        const lx=ax-(haveBias?bias.x:0),
+              ly=ay-(haveBias?bias.y:0),
+              lz=az-(haveBias?bias.z:0);
+    
+        const axisSelVal=axisSel.value;
+        const useAxis=axisSelVal==='auto'
+          ? (Math.abs(bias.x)>Math.abs(bias.y)&&Math.abs(bias.x)>Math.abs(bias.z)?'y':'x')
+          : axisSelVal; // simple heuristic retained
+    
+        const a={'x':lx,'y':ly,'z':lz}[useAxis];
+        if(lastT===null){lastT=t;return;}
+        const dt=(t-lastT)/1000;lastT=t;
+    
+        const smoothA=alpha*a+(1-alpha)*0;
+        v+=smoothA*dt;if(v<0)v=0;
+        const mph=mps2mph(v);
+        speedEl.textContent=`${mph.toFixed(1)} mph`;
+    
+        if(mph>1&&!t0) t0=t;
+        if(mph>=60&&!reached60&&t0){
+          reached60=true;timerEl.textContent=`0-60: ${((t-t0)/1000).toFixed(2)} s`;
+        }
+        /* drift kill */
+        if(Math.abs(smoothA)<0.3){idleMs+=dt*1000;if(idleMs>3000) v=0;}
+        else idleMs=0;
+      }
+    })();
+    </script>
+    </body>
+    </html>
+    
