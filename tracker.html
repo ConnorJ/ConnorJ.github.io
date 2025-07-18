@@ -255,6 +255,7 @@
     <div class="status-bar">
         <div id="sensorStatus" class="status-item">Sensor: Disconnected</div>
         <div id="samplingRate" class="status-item">Rate: 0 Hz</div>
+        <div id="currentSpeed" class="status-item">Speed: 0 mph</div>
         <div id="calibrationStatus" class="status-item">Calibration: Needed</div>
         <div id="runStatus" class="status-item">Status: Standby</div>
     </div>
@@ -343,6 +344,7 @@
                     browserWarning: document.getElementById('browserWarning'),
                     sensorStatus: document.getElementById('sensorStatus'),
                     samplingRate: document.getElementById('samplingRate'),
+                    currentSpeed: document.getElementById('currentSpeed'),
                     calibrationStatus: document.getElementById('calibrationStatus'),
                     runStatus: document.getElementById('runStatus'),
                     calibrateBtn: document.getElementById('calibrateBtn'),
@@ -497,6 +499,11 @@
             }
 
             async startCalibration() {
+                // Stop any running session before calibrating
+                if (this.isRunning) {
+                    this.stopRun();
+                }
+                
                 this.elements.calibrationModal.classList.remove('hidden');
                 this.elements.calibrationText.textContent = 'Keep device still...';
                 
@@ -538,12 +545,27 @@
                 this.elements.calibrationProgress.style.width = '0%';
             }
 
-            startRun() {
+            async startRun() {
                 if (!this.isCalibrated) {
-                    alert('Please calibrate sensors first');
-                    return;
+                    await this.startCalibration();
+                    // Wait for calibration to complete
+                    return new Promise((resolve) => {
+                        const checkCalibration = () => {
+                            if (this.isCalibrated) {
+                                this.beginRun();
+                                resolve();
+                            } else {
+                                setTimeout(checkCalibration, 100);
+                            }
+                        };
+                        checkCalibration();
+                    });
+                } else {
+                    this.beginRun();
                 }
+            }
 
+            beginRun() {
                 this.isRunning = true;
                 this.runStartTime = performance.now();
                 this.velocity = 0;
@@ -594,6 +616,17 @@
                 const speedMph = speedKph * 0.621371;
                 const distanceM = this.distance;
                 const distanceFt = distanceM * 3.28084;
+
+                // Add data to chart
+                const currentSpeed = this.isMetric ? speedKph : speedMph;
+                this.chartData.push({ time: timeElapsed, speed: currentSpeed, acceleration: acceleration });
+                
+                // Keep only last 30 seconds of data
+                this.chartData = this.chartData.filter(d => d.time > timeElapsed - 30);
+
+                // Update current speed display
+                const speedUnit = this.isMetric ? 'km/h' : 'mph';
+                this.elements.currentSpeed.textContent = `Speed: ${currentSpeed.toFixed(1)} ${speedUnit}`;
 
                 // Check speed metrics
                 this.checkSpeedMetric('0-40kph', speedKph, 40);
@@ -666,6 +699,13 @@
             toggleUnits() {
                 this.isMetric = !this.isMetric;
                 this.elements.unitToggle.textContent = this.isMetric ? 'Switch to Miles' : 'Switch to Kilometers';
+                
+                // Update current speed display with new units
+                const speedUnit = this.isMetric ? 'km/h' : 'mph';
+                const currentSpeedValue = this.isRunning ? 
+                    (this.isMetric ? this.velocity * 3.6 : this.velocity * 2.237) : 0;
+                this.elements.currentSpeed.textContent = `Speed: ${currentSpeedValue.toFixed(1)} ${speedUnit}`;
+                
                 this.renderMetrics();
             }
 
@@ -713,18 +753,26 @@
                 this.distance = 0;
                 this.chartData = [];
                 this.updateChart();
+                
+                // Reset current speed display
+                const speedUnit = this.isMetric ? 'km/h' : 'mph';
+                this.elements.currentSpeed.textContent = `Speed: 0.0 ${speedUnit}`;
             }
 
             initChart() {
                 this.ctx = this.elements.chart.getContext('2d');
-                this.resizeChart();
+                // Delay resize to ensure element is rendered
+                setTimeout(() => {
+                    this.resizeChart();
+                }, 100);
                 window.addEventListener('resize', () => this.resizeChart());
             }
 
             resizeChart() {
                 const rect = this.elements.chart.parentElement.getBoundingClientRect();
-                this.elements.chart.width = rect.width;
-                this.elements.chart.height = rect.height;
+                this.elements.chart.width = rect.width - 4; // Account for border
+                this.elements.chart.height = rect.height - 4; // Account for border
+                this.updateChart(); // Redraw chart after resize
             }
 
             updateChart() {
@@ -735,13 +783,11 @@
                 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                if (this.chartData.length < 2) return;
-
                 // Draw grid
                 ctx.strokeStyle = '#333';
                 ctx.lineWidth = 1;
                 
-                for (let i = 0; i < 10; i++) {
+                for (let i = 0; i <= 10; i++) {
                     const x = (canvas.width / 10) * i;
                     const y = (canvas.height / 10) * i;
                     
@@ -756,36 +802,37 @@
                     ctx.stroke();
                 }
 
-                // Add chart data and draw speed line
-                if (this.isRunning && this.velocity > 0) {
-                    const timeElapsed = (performance.now() - this.runStartTime) / 1000;
-                    const speed = this.isMetric ? this.velocity * 3.6 : this.velocity * 2.237;
-                    
-                    this.chartData.push({ time: timeElapsed, speed: speed });
-                    
-                    // Keep only last 30 seconds of data
-                    this.chartData = this.chartData.filter(d => d.time > timeElapsed - 30);
-                }
+                if (this.chartData.length < 2) return;
 
-                if (this.chartData.length > 1) {
-                    // Draw speed line
-                    ctx.strokeStyle = '#ff6b35';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
+                // Find max speed for scaling
+                const maxSpeed = Math.max(...this.chartData.map(d => d.speed), 50); // Minimum scale of 50
+                const minTime = Math.min(...this.chartData.map(d => d.time));
+                const maxTime = Math.max(...this.chartData.map(d => d.time));
+                const timeRange = Math.max(maxTime - minTime, 1); // Minimum range of 1 second
+
+                // Draw speed line
+                ctx.strokeStyle = '#ff6b35';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                
+                this.chartData.forEach((point, index) => {
+                    const x = ((point.time - minTime) / timeRange) * canvas.width;
+                    const y = canvas.height - (point.speed / maxSpeed) * canvas.height;
                     
-                    this.chartData.forEach((point, index) => {
-                        const x = (index / (this.chartData.length - 1)) * canvas.width;
-                        const y = canvas.height - (point.speed / 200) * canvas.height; // Scale to max 200 speed units
-                        
-                        if (index === 0) {
-                            ctx.moveTo(x, y);
-                        } else {
-                            ctx.lineTo(x, y);
-                        }
-                    });
-                    
-                    ctx.stroke();
-                }
+                    if (index === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                
+                ctx.stroke();
+
+                // Draw labels
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px Arial';
+                ctx.fillText(`Max: ${maxSpeed.toFixed(1)} ${this.isMetric ? 'km/h' : 'mph'}`, 10, 20);
+                ctx.fillText(`Time: ${timeRange.toFixed(1)}s`, 10, canvas.height - 10);
             }
 
             saveRun() {
