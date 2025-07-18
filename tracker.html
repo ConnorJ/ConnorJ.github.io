@@ -600,6 +600,7 @@
                 
                 // Multi-sensor fusion
                 this.gpsAvailable = false;
+                this.gpsPermissionRequested = false;
                 this.gpsSpeed = 0;
                 this.gpsLastUpdate = 0;
                 this.orientationSensor = null;
@@ -715,16 +716,7 @@
                     }
                 });
 
-                // Prevent accidental screen touches during runs
-                document.addEventListener('touchstart', (e) => {
-                    if (this.isRunning) {
-                        // Allow only stop button and emergency controls
-                        const allowedElements = ['stopBtn', 'resetBtn'];
-                        if (!allowedElements.includes(e.target.id)) {
-                            e.preventDefault();
-                        }
-                    }
-                }, { passive: false });
+
             }
 
             detectBrowser() {
@@ -832,8 +824,7 @@
                     this.fallbackToDeviceMotion();
                 }
                 
-                // Initialize GPS automatically
-                this.initGPS();
+                // GPS will be initialized when user starts first run
             }
 
             fallbackToDeviceMotion() {
@@ -1011,8 +1002,10 @@
                 let statusText = `Sensor: ${this.sensorType}`;
                 if (this.gpsAvailable && this.sensorType !== 'Not Available') {
                     statusText += ' + GPS ✓';
-                } else if (this.sensorType !== 'Not Available') {
+                } else if (this.sensorType !== 'Not Available' && this.gpsPermissionRequested) {
                     statusText += ' (GPS pending...)';
+                } else if (this.sensorType !== 'Not Available') {
+                    statusText += ' (GPS available)';
                 }
                 
                 this.elements.sensorStatus.textContent = statusText;
@@ -1021,6 +1014,32 @@
                     this.elements.sensorStatus.classList.add('status-active');
                 } else {
                     this.elements.sensorStatus.classList.remove('status-active');
+                }
+            }
+
+            requestGPSPermission() {
+                if ('geolocation' in navigator) {
+                    this.gpsPermissionRequested = true;
+                    
+                    // First, get current position to trigger permission prompt
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            console.log('GPS permission granted');
+                            this.initGPS();
+                        },
+                        (error) => {
+                            console.warn('GPS permission denied or unavailable:', error);
+                            this.updateSensorStatus();
+                        },
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 0
+                        }
+                    );
+                } else {
+                    console.warn('Geolocation not supported');
+                    this.updateSensorStatus();
                 }
             }
 
@@ -1034,7 +1053,10 @@
                     
                     navigator.geolocation.watchPosition(
                         (position) => this.handleGPSUpdate(position),
-                        (error) => console.warn('GPS error:', error),
+                        (error) => {
+                            console.warn('GPS error:', error);
+                            this.updateSensorStatus();
+                        },
                         options
                     );
                 }
@@ -1323,6 +1345,11 @@
                     }
                 }
 
+                // Request GPS permission explicitly
+                if (!this.gpsPermissionRequested) {
+                    this.requestGPSPermission();
+                }
+
                 // Auto-calibrate if needed
                 if (!this.isCalibrated) {
                     await this.startCalibration();
@@ -1367,9 +1394,6 @@
 
                 // Request wake lock to keep screen awake
                 this.requestWakeLock();
-                
-                // Lock touch interactions except for stop/reset
-                document.body.classList.add('touch-locked');
             }
 
             stopRun() {
@@ -1381,9 +1405,6 @@
 
                 // Release wake lock when run stops
                 this.releaseWakeLock();
-                
-                // Unlock touch interactions
-                document.body.classList.remove('touch-locked');
 
                 // Stop data collection and freeze chart
                 this.runStopped = true;
