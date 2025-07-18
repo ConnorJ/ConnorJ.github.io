@@ -306,6 +306,15 @@
                 this.lastSampleTime = 0;
                 this.sampleCount = 0;
                 
+                // Enhanced filtering and processing
+                this.accelerationBuffer = [];
+                this.velocityBuffer = [];
+                this.motionThreshold = 0.5; // m/s² threshold for motion detection
+                this.noiseThreshold = 2.0; // m/s² threshold for noise rejection
+                this.isMoving = false;
+                this.stationaryTime = 0;
+                this.lastValidAcceleration = 0;
+                
                 this.initMetrics();
                 this.initUI();
                 this.detectBrowser();
@@ -485,10 +494,13 @@
                     timestamp: data.timestamp
                 };
 
-                this.sensorData.push(calibratedData);
+                // Enhanced processing with filtering
+                const processedData = this.applyFiltering(calibratedData);
+                
+                this.sensorData.push(processedData);
 
                 if (this.isRunning) {
-                    this.updateMetrics(calibratedData);
+                    this.updateMetrics(processedData);
                     this.updateChart();
                 }
 
@@ -496,6 +508,72 @@
                 if (this.sensorData.length > 1000) {
                     this.sensorData.shift();
                 }
+            }
+
+            applyFiltering(data) {
+                // Calculate acceleration magnitude
+                const magnitude = Math.sqrt(data.x ** 2 + data.y ** 2 + data.z ** 2);
+                
+                // Add to acceleration buffer for filtering
+                this.accelerationBuffer.push({
+                    magnitude: magnitude,
+                    timestamp: data.timestamp,
+                    raw: { x: data.x, y: data.y, z: data.z }
+                });
+
+                // Keep buffer size manageable (last 20 samples for ~200ms at 100Hz)
+                if (this.accelerationBuffer.length > 20) {
+                    this.accelerationBuffer.shift();
+                }
+
+                // Apply noise rejection - discard extreme outliers
+                if (magnitude > this.noiseThreshold * 5) {
+                    // Use last valid acceleration if current reading is extreme noise
+                    return {
+                        ...data,
+                        filteredMagnitude: this.lastValidAcceleration
+                    };
+                }
+
+                // Apply moving average filter (middle 90% of recent samples)
+                let filteredMagnitude = magnitude;
+                if (this.accelerationBuffer.length >= 5) {
+                    const recentMagnitudes = this.accelerationBuffer
+                        .slice(-10)
+                        .map(d => d.magnitude)
+                        .sort((a, b) => a - b);
+                    
+                    // Remove top and bottom 5% (outlier rejection)
+                    const trimCount = Math.floor(recentMagnitudes.length * 0.05);
+                    const trimmedData = recentMagnitudes.slice(trimCount, -trimCount || undefined);
+                    
+                    // Calculate moving average of remaining data
+                    filteredMagnitude = trimmedData.reduce((sum, val) => sum + val, 0) / trimmedData.length;
+                }
+
+                // Motion detection with hysteresis
+                if (!this.isMoving && filteredMagnitude > this.motionThreshold) {
+                    this.isMoving = true;
+                    this.stationaryTime = 0;
+                } else if (this.isMoving && filteredMagnitude < this.motionThreshold * 0.5) {
+                    this.stationaryTime += 1;
+                    // Require 1 second of low acceleration to consider stopped
+                    if (this.stationaryTime > 100) { // ~1 sec at 100Hz
+                        this.isMoving = false;
+                        // Zero velocity update when stopped
+                        if (this.isRunning) {
+                            this.velocity *= 0.95; // Gradual velocity decay
+                        }
+                    }
+                }
+
+                this.lastValidAcceleration = filteredMagnitude;
+
+                return {
+                    ...data,
+                    filteredMagnitude: filteredMagnitude,
+                    isMoving: this.isMoving
+                };
             }
 
             async startCalibration() {
@@ -528,17 +606,33 @@
             }
 
             finishCalibration(calibrationData) {
-                if (calibrationData.length > 0) {
-                    // Calculate average offset
+                if (calibrationData.length > 10) {
+                    // Remove outliers for better calibration
+                    const xValues = calibrationData.map(d => d.x).sort((a, b) => a - b);
+                    const yValues = calibrationData.map(d => d.y).sort((a, b) => a - b);
+                    const zValues = calibrationData.map(d => d.z).sort((a, b) => a - b);
+                    
+                    // Use median values to avoid outlier influence
+                    const medianIndex = Math.floor(calibrationData.length / 2);
                     this.calibrationOffset = {
-                        x: calibrationData.reduce((sum, d) => sum + d.x, 0) / calibrationData.length,
-                        y: calibrationData.reduce((sum, d) => sum + d.y, 0) / calibrationData.length,
-                        z: calibrationData.reduce((sum, d) => sum + d.z, 0) / calibrationData.length
+                        x: xValues[medianIndex],
+                        y: yValues[medianIndex],
+                        z: zValues[medianIndex]
                     };
+                    
+                    // Reset processing buffers
+                    this.accelerationBuffer = [];
+                    this.velocityBuffer = [];
+                    this.velocity = 0;
+                    this.distance = 0;
+                    this.isMoving = false;
+                    this.stationaryTime = 0;
                     
                     this.isCalibrated = true;
                     this.elements.calibrationStatus.textContent = 'Calibration: Complete';
                     this.elements.calibrationStatus.classList.add('status-active');
+                } else {
+                    this.elements.calibrationStatus.textContent = 'Calibration: Failed';
                 }
 
                 this.elements.calibrationModal.classList.add('hidden');
@@ -602,14 +696,43 @@
                 
                 if (dt <= 0) return;
 
-                // Calculate acceleration magnitude
-                const acceleration = Math.sqrt(sensorData.x ** 2 + sensorData.y ** 2 + sensorData.z ** 2);
+                // Use filtered acceleration magnitude
+                const acceleration = sensorData.filteredMagnitude || 0;
                 
-                // Update velocity (m/s)
-                this.velocity += acceleration * dt;
+                // Only update velocity if we're actually moving
+                if (sensorData.isMoving && acceleration > this.motionThreshold) {
+                    // Apply improved integration with drift correction
+                    const velocityChange = acceleration * dt;
+                    this.velocity += velocityChange;
+                    
+                    // Add to velocity buffer for smoothing
+                    this.velocityBuffer.push(this.velocity);
+                    if (this.velocityBuffer.length > 10) {
+                        this.velocityBuffer.shift();
+                    }
+                    
+                    // Apply velocity smoothing (moving average)
+                    if (this.velocityBuffer.length >= 3) {
+                        const sortedVelocities = [...this.velocityBuffer].sort((a, b) => a - b);
+                        // Use median of recent velocities to reduce noise
+                        const medianIndex = Math.floor(sortedVelocities.length / 2);
+                        this.velocity = sortedVelocities[medianIndex];
+                    }
+                } else if (!sensorData.isMoving) {
+                    // Gradual velocity decay when not moving
+                    this.velocity *= 0.9;
+                    if (Math.abs(this.velocity) < 0.1) {
+                        this.velocity = 0; // Zero out very small velocities
+                    }
+                }
+
+                // Ensure velocity is never negative (for drag racing)
+                this.velocity = Math.max(0, this.velocity);
                 
-                // Update distance (m)
-                this.distance += this.velocity * dt;
+                // Update distance (m) - only when moving
+                if (this.velocity > 0) {
+                    this.distance += this.velocity * dt;
+                }
 
                 // Convert to display units
                 const speedKph = this.velocity * 3.6;
@@ -619,7 +742,12 @@
 
                 // Add data to chart
                 const currentSpeed = this.isMetric ? speedKph : speedMph;
-                this.chartData.push({ time: timeElapsed, speed: currentSpeed, acceleration: acceleration });
+                this.chartData.push({ 
+                    time: timeElapsed, 
+                    speed: currentSpeed, 
+                    acceleration: acceleration,
+                    isMoving: sensorData.isMoving 
+                });
                 
                 // Keep only last 30 seconds of data
                 this.chartData = this.chartData.filter(d => d.time > timeElapsed - 30);
@@ -752,6 +880,14 @@
                 this.velocity = 0;
                 this.distance = 0;
                 this.chartData = [];
+                
+                // Reset filtering variables
+                this.accelerationBuffer = [];
+                this.velocityBuffer = [];
+                this.isMoving = false;
+                this.stationaryTime = 0;
+                this.lastValidAcceleration = 0;
+                
                 this.updateChart();
                 
                 // Reset current speed display
