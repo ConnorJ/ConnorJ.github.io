@@ -20,6 +20,44 @@
             overflow-x: hidden;
         }
 
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Desktop-specific improvements */
+        @media (min-width: 768px) {
+            .container {
+                padding: 20px;
+                margin-top: 20px;
+            }
+            
+            body {
+                padding: 0;
+            }
+            
+            .speed-sign {
+                width: 180px;
+                height: 200px;
+                padding: 20px;
+            }
+            
+            .speed-value {
+                font-size: 54px;
+            }
+            
+            .speed-display .sensor-display {
+                width: 180px;
+            }
+            
+            .unit-toggle-small {
+                font-size: 14px;
+                padding: 8px 16px;
+                margin-bottom: 15px;
+            }
+        }
+
         .header {
             text-align: center;
             margin-bottom: 20px;
@@ -53,6 +91,24 @@
             justify-content: center;
             align-items: center;
             gap: 15px;
+        }
+
+        /* Desktop layout improvements */
+        @media (min-width: 768px) {
+            .main-layout {
+                justify-content: space-between;
+                max-width: 100%;
+            }
+            
+            .left-controls {
+                flex: 0 0 200px;
+                margin-right: 40px;
+            }
+            
+            .speed-display {
+                flex: 0 0 auto;
+                margin: 0 auto;
+            }
         }
 
         .unit-toggle {
@@ -753,11 +809,12 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="title">Drag Racing Speed Tracker</div>
-    </div>
+    <div class="container">
+        <div class="header">
+            <div class="title">Drag Racing Speed Tracker</div>
+        </div>
 
-    <div id="browserWarning" class="warning hidden"></div>
+        <div id="browserWarning" class="warning hidden"></div>
 
     <div class="main-layout">
         <div class="left-controls">
@@ -780,13 +837,6 @@
         </div>
     </div>
 
-    <div class="chart-container">
-        <div class="chart-status-overlay">
-            <div id="runStatus" class="chart-status">Status: Standby</div>
-        </div>
-        <canvas id="chart"></canvas>
-    </div>
-
     <div id="permissionsWarning" class="permissions-warning">
         <div class="warning-header">
             ⚠️ Accuracy Warning
@@ -797,6 +847,13 @@
         <div class="permission-links" id="permissionLinks">
             <!-- Links will be populated by JavaScript based on device type -->
         </div>
+    </div>
+
+    <div class="chart-container">
+        <div class="chart-status-overlay">
+            <div id="runStatus" class="chart-status">Status: Standby</div>
+        </div>
+        <canvas id="chart"></canvas>
     </div>
 
     <div class="metrics-grid" id="metricsGrid">
@@ -925,6 +982,8 @@
         </div>
     </div>
     
+    </div> <!-- Close container -->
+    
     <script>
         class DragRacingTracker {
             constructor() {
@@ -1046,12 +1105,11 @@
                 this.initOrientation();
                 this.initWakeLock();
                 this.renderMetrics();
-                this.initPermissionWarning();
-                
-                // Initialize sensor status display
+                // Initialize all detection before permission warning
                 this.sensorType = 'Not Connected';
-                this.initDeviceMotionDetection();
-                this.updateSensorStatus();
+                this.initDeviceMotionDetection(); // async but we don't need to wait
+                this.initGPSDetection();
+                this.initPermissionWarning();
                 
                 // Initialize button states
                 this.elements.startBtn.classList.remove('hidden');
@@ -2459,6 +2517,8 @@
 
             initPermissionWarning() {
                 this.detectDeviceAndUpdateWarning();
+                
+                // Initial check - will be updated by async detection methods
                 this.checkPermissions();
                 
                 // Check permissions periodically
@@ -2641,18 +2701,67 @@
                 }
             }
 
-            initDeviceMotionDetection() {
-                // For non-iOS devices, automatically detect if device motion is available
-                if ('DeviceMotionEvent' in window && typeof DeviceMotionEvent.requestPermission !== 'function') {
+            async initDeviceMotionDetection() {
+                if (!('DeviceMotionEvent' in window)) {
+                    console.log('Device motion not supported');
+                    this.hasPermission = false;
+                    return;
+                }
+
+                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    // iOS - check current permission status without requesting
+                    try {
+                        // Unfortunately, iOS doesn't provide a way to check permission status
+                        // without triggering the permission request, so we assume it's not granted
+                        console.log('Device motion requires permission (iOS)');
+                        this.hasPermission = false;
+                    } catch (error) {
+                        console.log('Device motion permission check failed:', error);
+                        this.hasPermission = false;
+                    }
+                } else {
                     // Android/other platforms - device motion is available without explicit permission
                     this.hasPermission = true;
                     console.log('Device motion available (Android/other platform)');
-                } else if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                    // iOS - need to explicitly request permission
-                    console.log('Device motion requires permission (iOS)');
-                } else {
-                    console.log('Device motion not supported');
                 }
+
+                // Update display immediately after detection
+                this.checkPermissions();
+            }
+
+            initGPSDetection() {
+                // Check if geolocation is supported
+                if (!('geolocation' in navigator)) {
+                    console.log('GPS not supported');
+                    return;
+                }
+
+                // Try to detect if GPS permission was previously granted
+                // by attempting to get current position with no timeout
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        // Success - GPS permission already granted
+                        this.gpsPermissionGranted = true;
+                        this.gpsPermissionRequested = true;
+                        console.log('GPS permission already granted');
+                        this.initGPS();
+                        // Update display after detection
+                        this.checkPermissions();
+                    },
+                    (error) => {
+                        // Error - permission likely not granted or GPS unavailable
+                        console.log('GPS permission not granted or unavailable:', error.code);
+                        this.gpsPermissionGranted = false;
+                        this.gpsPermissionRequested = false;
+                        // Update display after detection
+                        this.checkPermissions();
+                    },
+                    {
+                        timeout: 1000, // Very short timeout to avoid hanging
+                        enableHighAccuracy: false, // Faster response
+                        maximumAge: 300000 // Accept cached position up to 5 minutes old
+                    }
+                );
             }
         }
 
