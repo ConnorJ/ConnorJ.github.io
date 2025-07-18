@@ -1721,6 +1721,12 @@
                 this.lastValidAcceleration = 0;
                 this.lastTimestamp = 0;
                 
+                // Launch detection variables
+                this.launchDetected = false;
+                this.launchTime = null;
+                this.launchAccelerationBuffer = [];
+                this.prelaunchTime = 0;
+                
                 // Reset achievements for this run
                 Object.keys(this.runAchievements.speedTargets).forEach(key => {
                     this.runAchievements.speedTargets[key].achieved = false;
@@ -1820,6 +1826,11 @@
                 // Ensure velocity is never negative (for drag racing)
                 this.velocity = Math.max(0, this.velocity);
                 
+                // Launch detection logic
+                if (!this.launchDetected) {
+                    this.detectLaunch(acceleration, sensorData.isMoving, timeElapsed);
+                }
+                
                 // Update distance (m) - only when moving
                 if (this.velocity > 0) {
                     this.distance += this.velocity * dt;
@@ -1895,12 +1906,61 @@
                 this.renderMetrics();
             }
 
+            detectLaunch(acceleration, isMoving, timeElapsed) {
+                // Add current acceleration to launch detection buffer
+                this.launchAccelerationBuffer.push({
+                    acceleration: acceleration,
+                    isMoving: isMoving,
+                    timestamp: timeElapsed
+                });
+                
+                // Keep only last 2 seconds of data for launch detection
+                this.launchAccelerationBuffer = this.launchAccelerationBuffer.filter(
+                    data => data.timestamp > timeElapsed - 2.0
+                );
+                
+                // Launch detection criteria:
+                // 1. Must have sustained acceleration > threshold for at least 0.5 seconds
+                // 2. Must be moving consistently
+                // 3. Velocity should be increasing
+                
+                if (this.launchAccelerationBuffer.length >= 10) { // At least 0.1 seconds at 100Hz
+                    const recentData = this.launchAccelerationBuffer.slice(-10); // Last 0.1 seconds
+                    const sustainedAcceleration = recentData.every(d => d.acceleration > 1.5 && d.isMoving);
+                    const isAccelerating = this.velocity > 2.0; // 2 m/s = ~7 km/h
+                    
+                    // Check for sustained acceleration over longer period (0.5 seconds)
+                    const longerBuffer = this.launchAccelerationBuffer.filter(
+                        data => data.timestamp > timeElapsed - 0.5
+                    );
+                    const sustainedLaunch = longerBuffer.length >= 25 && // 0.5 seconds at 50Hz minimum
+                        longerBuffer.filter(d => d.acceleration > 1.0 && d.isMoving).length >= longerBuffer.length * 0.8;
+                    
+                    if (sustainedAcceleration && isAccelerating && sustainedLaunch) {
+                        this.launchDetected = true;
+                        this.launchTime = performance.now();
+                        this.prelaunchTime = timeElapsed; // Store how much time passed before launch
+                        
+                        // Update run status to show launch detected
+                        this.elements.runStatus.textContent = 'Status: Launch Detected!';
+                        console.log(`Launch detected at ${timeElapsed.toFixed(2)}s after run start`);
+                    }
+                }
+            }
+
             checkSpeedMetric(id, currentSpeed, targetSpeed, fromSpeed = 0) {
                 const metric = this.metricDefinitions.speed.find(m => m.id === id);
                 const achievement = this.runAchievements.speedTargets[id];
                 
                 if (metric && achievement && !achievement.achieved && currentSpeed >= targetSpeed) {
-                    const timeElapsed = (performance.now() - this.runStartTime) / 1000;
+                    // Use launch time for timing calculations if launch was detected
+                    let timeElapsed;
+                    if (this.launchDetected && this.launchTime) {
+                        timeElapsed = (performance.now() - this.launchTime) / 1000;
+                    } else {
+                        // Fallback to run start time if no launch detected
+                        timeElapsed = (performance.now() - this.runStartTime) / 1000;
+                    }
                     const timeValue = timeElapsed.toFixed(2);
                     
                     // Mark as achieved for this run
@@ -1929,7 +1989,7 @@
                 }
             }
 
-            checkDistanceMetric(id, currentDistance, targetDistance, timeElapsed) {
+            checkDistanceMetric(id, currentDistance, targetDistance, timeElapsedFromRunStart) {
                 const metric = this.metricDefinitions.distance.find(m => m.id === id);
                 
                 // Track if this distance was achieved in current run
@@ -1940,6 +2000,15 @@
                 if (metric && currentDistance >= targetDistance && !this.runDistanceAchievements[id]) {
                     const speed = this.isMetric ? this.velocity * 3.6 : this.velocity * 2.237;
                     const unit = this.isMetric ? 'km/h' : 'mph';
+                    
+                    // Use launch time for timing calculations if launch was detected
+                    let timeElapsed;
+                    if (this.launchDetected && this.launchTime) {
+                        timeElapsed = (performance.now() - this.launchTime) / 1000;
+                    } else {
+                        // Fallback to run start time if no launch detected
+                        timeElapsed = timeElapsedFromRunStart;
+                    }
                     const timeValue = timeElapsed.toFixed(2);
                     
                     // Add to history
