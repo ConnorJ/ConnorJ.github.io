@@ -1050,6 +1050,7 @@
                 
                 // Initialize sensor status display
                 this.sensorType = 'Not Connected';
+                this.initDeviceMotionDetection();
                 this.updateSensorStatus();
                 
                 // Initialize button states
@@ -2504,7 +2505,9 @@
 
             checkPermissions() {
                 const hasLocation = this.gpsPermissionGranted;
-                const hasMotion = this.hasPermission && this.isCalibrated;
+                // Check if device motion is available and permission is granted
+                // Don't require calibration for permission status, only availability
+                const hasMotion = this.hasPermission || this.isDeviceMotionAvailable();
                 
                 // Update Device Motion sensor status
                 if (hasMotion) {
@@ -2544,7 +2547,7 @@
             }
 
             async handleSensorClick() {
-                if (this.hasPermission && this.isCalibrated) return; // Already have permission
+                if (this.isDeviceMotionAvailable()) return; // Already have permission
                 
                 try {
                     // Try to request permission
@@ -2620,6 +2623,36 @@
                 document.getElementById('androidMotionModal').classList.add('hidden');
                 document.getElementById('iosGpsModal').classList.add('hidden');
                 document.getElementById('androidGpsModal').classList.add('hidden');
+            }
+
+            isDeviceMotionAvailable() {
+                // Check if DeviceMotionEvent is supported
+                if (!('DeviceMotionEvent' in window)) {
+                    return false;
+                }
+                
+                // For iOS, check if permission is required and granted
+                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    // iOS requires permission, check if we have it
+                    return this.hasPermission;
+                } else {
+                    // Android/other platforms - if DeviceMotionEvent exists, it's available
+                    return true;
+                }
+            }
+
+            initDeviceMotionDetection() {
+                // For non-iOS devices, automatically detect if device motion is available
+                if ('DeviceMotionEvent' in window && typeof DeviceMotionEvent.requestPermission !== 'function') {
+                    // Android/other platforms - device motion is available without explicit permission
+                    this.hasPermission = true;
+                    console.log('Device motion available (Android/other platform)');
+                } else if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    // iOS - need to explicitly request permission
+                    console.log('Device motion requires permission (iOS)');
+                } else {
+                    console.log('Device motion not supported');
+                }
             }
         }
 
