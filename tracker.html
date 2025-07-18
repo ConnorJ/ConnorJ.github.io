@@ -86,10 +86,26 @@
             color: #fff;
             text-align: center;
             width: 200px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sensor-display:hover {
+            background: #444;
+        }
+
+        .sensor-display.missing {
+            background: #330000;
+            border-color: #ff0000;
+            color: #ff4444;
+        }
+
+        .sensor-display.missing:hover {
+            background: #440000;
         }
 
         .speed-display .sensor-display {
-            width: 150px;
+            width: 160px;
             max-width: 90vw;
         }
 
@@ -518,6 +534,70 @@
             margin-right: 4px;
         }
 
+        .instruction-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .instruction-content {
+            background: #222;
+            border: 2px solid #ff6b35;
+            border-radius: 15px;
+            padding: 25px;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .instruction-header {
+            color: #ff6b35;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .instruction-steps {
+            color: #fff;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .instruction-steps ol {
+            padding-left: 20px;
+        }
+
+        .instruction-steps li {
+            margin-bottom: 8px;
+        }
+
+        .instruction-close {
+            background: #ff6b35;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            display: block;
+            margin: 0 auto;
+            width: 100px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
         .touch-locked {
             pointer-events: none;
         }
@@ -549,8 +629,8 @@
             color: #000;
             border: 4px solid #ff0000;
             border-radius: 15px;
-            width: 120px;
-            height: 140px;
+            width: 160px;
+            height: 180px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -559,11 +639,11 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
             position: relative;
             flex-shrink: 0;
-            padding: 10px;
+            padding: 15px;
         }
 
         .speed-value {
-            font-size: 40px;
+            font-size: 48px;
             font-weight: 900;
             line-height: 1;
             color: #000;
@@ -621,17 +701,17 @@
             }
             
             .speed-sign {
-                width: 70px;
-                height: 90px;
-                padding: 5px;
+                width: 100px;
+                height: 120px;
+                padding: 8px;
             }
             
             .speed-value {
-                font-size: 24px;
+                font-size: 30px;
             }
             
             .speed-display .sensor-display {
-                width: 120px;
+                width: 100px;
                 max-width: 85vw;
                 font-size: 10px;
                 padding: 6px 8px;
@@ -656,6 +736,7 @@
             </div>
             
             <div id="sensorStatus" class="sensor-display">Sensor: Disconnected</div>
+            <div id="gpsStatus" class="sensor-display">GPS: Disconnected</div>
         </div>
         
         <div class="speed-display">
@@ -733,6 +814,82 @@
                 <button class="confirm-no" onclick="tracker.closeConfirmModal()">Cancel</button>
                 <button class="confirm-yes" onclick="tracker.confirmReset()">Reset All</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Instruction Modals -->
+    <div id="iosMotionModal" class="instruction-modal hidden">
+        <div class="instruction-content">
+            <div class="instruction-header">Enable Motion & Fitness on iPhone</div>
+            <div class="instruction-steps">
+                <ol>
+                    <li>Open the <strong>Settings</strong> app on your iPhone</li>
+                    <li>Scroll down and tap <strong>Privacy & Security</strong></li>
+                    <li>Tap <strong>Motion & Fitness</strong></li>
+                    <li>Turn on <strong>Fitness Tracking</strong></li>
+                    <li>Scroll down and find <strong>Safari</strong> (or your browser)</li>
+                    <li>Turn on the toggle next to your browser</li>
+                    <li>Return to this page and refresh</li>
+                </ol>
+            </div>
+            <button class="instruction-close" onclick="tracker.closeInstructionModal()">Close</button>
+        </div>
+    </div>
+
+    <div id="androidMotionModal" class="instruction-modal hidden">
+        <div class="instruction-content">
+            <div class="instruction-header">Enable Device Motion on Android</div>
+            <div class="instruction-steps">
+                <ol>
+                    <li>Open <strong>Chrome</strong> (or your browser)</li>
+                    <li>Tap the <strong>three dots</strong> menu in the top-right</li>
+                    <li>Tap <strong>Settings</strong></li>
+                    <li>Tap <strong>Site settings</strong></li>
+                    <li>Tap <strong>Motion sensors</strong></li>
+                    <li>Turn on <strong>Motion sensors</strong></li>
+                    <li>Return to this page and refresh</li>
+                </ol>
+                <p><strong>Alternative:</strong> When prompted by this website, tap <strong>Allow</strong> for motion access.</p>
+            </div>
+            <button class="instruction-close" onclick="tracker.closeInstructionModal()">Close</button>
+        </div>
+    </div>
+
+    <div id="iosGpsModal" class="instruction-modal hidden">
+        <div class="instruction-content">
+            <div class="instruction-header">Enable Location Services on iPhone</div>
+            <div class="instruction-steps">
+                <ol>
+                    <li>Open the <strong>Settings</strong> app on your iPhone</li>
+                    <li>Tap <strong>Privacy & Security</strong></li>
+                    <li>Tap <strong>Location Services</strong></li>
+                    <li>Turn on <strong>Location Services</strong> at the top</li>
+                    <li>Scroll down and find <strong>Safari</strong> (or your browser)</li>
+                    <li>Tap on your browser and select <strong>While Using App</strong></li>
+                    <li>Return to this page and refresh</li>
+                </ol>
+            </div>
+            <button class="instruction-close" onclick="tracker.closeInstructionModal()">Close</button>
+        </div>
+    </div>
+
+    <div id="androidGpsModal" class="instruction-modal hidden">
+        <div class="instruction-content">
+            <div class="instruction-header">Enable Location Services on Android</div>
+            <div class="instruction-steps">
+                <ol>
+                    <li>Open your device <strong>Settings</strong></li>
+                    <li>Tap <strong>Location</strong> (or <strong>Privacy</strong> → <strong>Location</strong>)</li>
+                    <li>Turn on <strong>Use location</strong></li>
+                    <li>Open <strong>Chrome</strong> (or your browser)</li>
+                    <li>Tap the <strong>three dots</strong> menu → <strong>Settings</strong></li>
+                    <li>Tap <strong>Site settings</strong> → <strong>Location</strong></li>
+                    <li>Turn on <strong>Location</strong></li>
+                    <li>Return to this page and refresh</li>
+                </ol>
+                <p><strong>Alternative:</strong> When prompted by this website, tap <strong>Allow</strong> for location access.</p>
+            </div>
+            <button class="instruction-close" onclick="tracker.closeInstructionModal()">Close</button>
         </div>
     </div>
     
@@ -848,7 +1005,8 @@
                     calibrationProgress: document.getElementById('calibrationProgress'),
                     calibrationText: document.getElementById('calibrationText'),
                     permissionsWarning: document.getElementById('permissionsWarning'),
-                    permissionLinks: document.getElementById('permissionLinks')
+                    permissionLinks: document.getElementById('permissionLinks'),
+                    gpsStatus: document.getElementById('gpsStatus')
                 };
 
                 this.initEventListeners();
@@ -875,6 +1033,10 @@
                 this.elements.startBtn.addEventListener('click', () => this.startRun());
                 this.elements.stopBtn.addEventListener('click', () => this.stopRun());
                 this.elements.resetBtn.addEventListener('click', () => this.showResetConfirmation());
+
+                // Sensor status click handlers
+                this.elements.sensorStatus.addEventListener('click', () => this.handleSensorClick());
+                this.elements.gpsStatus.addEventListener('click', () => this.handleGpsClick());
 
                 // Keep screen awake during runs
                 document.addEventListener('visibilitychange', () => {
@@ -2256,6 +2418,22 @@
                 const hasLocation = this.gpsPermissionGranted;
                 const hasMotion = this.hasPermission && this.isCalibrated;
                 
+                // Update sensor status displays
+                if (hasMotion) {
+                    this.elements.sensorStatus.classList.remove('missing');
+                } else {
+                    this.elements.sensorStatus.classList.add('missing');
+                }
+                
+                if (hasLocation) {
+                    this.elements.gpsStatus.classList.remove('missing');
+                    this.elements.gpsStatus.textContent = 'GPS: Connected';
+                } else {
+                    this.elements.gpsStatus.classList.add('missing');
+                    this.elements.gpsStatus.textContent = 'GPS: Click to Enable';
+                }
+                
+                // Only show warning if permissions are actually missing
                 if (hasLocation && hasMotion) {
                     this.elements.permissionsWarning.classList.add('hidden');
                 } else {
@@ -2268,6 +2446,85 @@
                     const warningText = `For best accuracy, enable ${missingPermissions.join(' and ')}. Without these, measurements may be significantly less accurate.`;
                     this.elements.permissionsWarning.querySelector('.warning-content').textContent = warningText;
                 }
+            }
+
+            async handleSensorClick() {
+                if (this.hasPermission && this.isCalibrated) return; // Already have permission
+                
+                try {
+                    // Try to request permission
+                    if ('DeviceMotionEvent' in window && typeof DeviceMotionEvent.requestPermission === 'function') {
+                        const permission = await DeviceMotionEvent.requestPermission();
+                        if (permission === 'granted') {
+                            this.hasPermission = true;
+                            this.initSensors();
+                            return;
+                        }
+                    } else if ('DeviceMotionEvent' in window) {
+                        // Android doesn't require explicit permission request
+                        this.hasPermission = true;
+                        this.initSensors();
+                        return;
+                    }
+                } catch (error) {
+                    console.log('Permission request failed:', error);
+                }
+                
+                // If we reach here, show instruction modal
+                this.showMotionInstructions();
+            }
+
+            async handleGpsClick() {
+                if (this.gpsPermissionGranted) return; // Already have permission
+                
+                try {
+                    // Try to request GPS permission
+                    const position = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            timeout: 5000,
+                            enableHighAccuracy: true
+                        });
+                    });
+                    
+                    this.gpsPermissionGranted = true;
+                    this.gpsPermissionRequested = true;
+                    this.checkPermissions();
+                    return;
+                } catch (error) {
+                    console.log('GPS permission request failed:', error);
+                }
+                
+                // If we reach here, show instruction modal
+                this.showGpsInstructions();
+            }
+
+            showMotionInstructions() {
+                const userAgent = navigator.userAgent.toLowerCase();
+                const isIOS = /iphone|ipad|ipod/.test(userAgent);
+                
+                if (isIOS) {
+                    document.getElementById('iosMotionModal').classList.remove('hidden');
+                } else {
+                    document.getElementById('androidMotionModal').classList.remove('hidden');
+                }
+            }
+
+            showGpsInstructions() {
+                const userAgent = navigator.userAgent.toLowerCase();
+                const isIOS = /iphone|ipad|ipod/.test(userAgent);
+                
+                if (isIOS) {
+                    document.getElementById('iosGpsModal').classList.remove('hidden');
+                } else {
+                    document.getElementById('androidGpsModal').classList.remove('hidden');
+                }
+            }
+
+            closeInstructionModal() {
+                document.getElementById('iosMotionModal').classList.add('hidden');
+                document.getElementById('androidMotionModal').classList.add('hidden');
+                document.getElementById('iosGpsModal').classList.add('hidden');
+                document.getElementById('androidGpsModal').classList.add('hidden');
             }
         }
 
