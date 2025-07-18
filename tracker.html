@@ -49,8 +49,10 @@
         .speed-display {
             flex: 1;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
+            gap: 15px;
         }
 
         .unit-toggle {
@@ -469,11 +471,16 @@
 
         .wake-lock-active::after {
             content: "🔒";
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            font-size: 12px;
-            opacity: 0.7;
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            font-size: 16px;
+            opacity: 0.8;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            padding: 4px 6px;
+            border-radius: 4px;
         }
 
         .speed-sign {
@@ -495,7 +502,7 @@
         }
 
         .speed-value {
-            font-size: 32px;
+            font-size: 40px;
             font-weight: 900;
             line-height: 1;
             color: #000;
@@ -508,12 +515,7 @@
             margin-top: 2px;
         }
 
-        .speed-confidence {
-            font-size: 10px;
-            color: #999;
-            margin-top: 4px;
-            text-align: center;
-        }
+
 
         .speed-sign.moving {
             border-color: #ff6b35;
@@ -564,11 +566,7 @@
             }
             
             .speed-value {
-                font-size: 20px;
-            }
-            
-            .speed-confidence {
-                font-size: 8px;
+                font-size: 24px;
             }
         }
     </style>
@@ -596,8 +594,8 @@
             <div id="currentSpeed" class="speed-sign">
                 <div class="speed-value">0</div>
                 <div class="speed-unit">mph</div>
-                <div id="speedConfidence" class="speed-confidence">Confidence: 0%</div>
             </div>
+            <div id="speedConfidence" class="sensor-display">Confidence: 0%</div>
         </div>
     </div>
 
