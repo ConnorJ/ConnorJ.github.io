@@ -256,6 +256,7 @@
         <div id="sensorStatus" class="status-item">Sensor: Disconnected</div>
         <div id="samplingRate" class="status-item">Rate: 0 Hz</div>
         <div id="currentSpeed" class="status-item">Speed: 0 mph</div>
+        <div id="confidenceStatus" class="status-item">Confidence: 0%</div>
         <div id="calibrationStatus" class="status-item">Calibration: Needed</div>
         <div id="runStatus" class="status-item">Status: Standby</div>
     </div>
@@ -315,6 +316,15 @@
                 this.stationaryTime = 0;
                 this.lastValidAcceleration = 0;
                 
+                // Multi-sensor fusion
+                this.gpsAvailable = false;
+                this.gpsSpeed = 0;
+                this.gpsLastUpdate = 0;
+                this.orientationSensor = null;
+                this.deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
+                this.velocityConfidence = 0;
+                this.lastGpsPosition = null;
+                
                 this.initMetrics();
                 this.initUI();
                 this.detectBrowser();
@@ -354,6 +364,7 @@
                     sensorStatus: document.getElementById('sensorStatus'),
                     samplingRate: document.getElementById('samplingRate'),
                     currentSpeed: document.getElementById('currentSpeed'),
+                    confidenceStatus: document.getElementById('confidenceStatus'),
                     calibrationStatus: document.getElementById('calibrationStatus'),
                     runStatus: document.getElementById('runStatus'),
                     calibrateBtn: document.getElementById('calibrateBtn'),
@@ -369,6 +380,8 @@
 
                 this.initEventListeners();
                 this.initChart();
+                this.initGPS();
+                this.initOrientation();
                 this.renderMetrics();
             }
 
@@ -445,10 +458,102 @@
             fallbackToDeviceMotion() {
                 if (window.DeviceMotionEvent) {
                     window.addEventListener('devicemotion', (event) => this.handleDeviceMotion(event));
-                    this.elements.sensorStatus.textContent = 'Sensor: DeviceMotion';
+                    this.elements.sensorStatus.textContent = 'Sensor: DeviceMotion + GPS';
                     this.elements.sensorStatus.classList.add('status-active');
                 } else {
                     this.elements.sensorStatus.textContent = 'Sensor: Not Available';
+                }
+            }
+
+            initGPS() {
+                if ('geolocation' in navigator) {
+                    const options = {
+                        enableHighAccuracy: true,
+                        maximumAge: 1000,
+                        timeout: 5000
+                    };
+                    
+                    navigator.geolocation.watchPosition(
+                        (position) => this.handleGPSUpdate(position),
+                        (error) => console.warn('GPS error:', error),
+                        options
+                    );
+                }
+            }
+
+            initOrientation() {
+                if ('DeviceOrientationEvent' in window) {
+                    window.addEventListener('deviceorientation', (event) => {
+                        this.deviceOrientation = {
+                            alpha: event.alpha || 0,
+                            beta: event.beta || 0,
+                            gamma: event.gamma || 0
+                        };
+                    });
+                }
+            }
+
+            handleGPSUpdate(position) {
+                const now = performance.now();
+                this.gpsLastUpdate = now;
+                
+                if (position.coords.speed !== null && position.coords.speed >= 0) {
+                    this.gpsSpeed = position.coords.speed; // m/s
+                    this.gpsAvailable = true;
+                    
+                    // Update sensor status to show GPS is active
+                    if (this.elements.sensorStatus.textContent.includes('DeviceMotion')) {
+                        this.elements.sensorStatus.textContent = 'Sensor: DeviceMotion + GPS ✓';
+                    }
+                }
+                
+                // Calculate GPS-based distance if we have a previous position
+                if (this.lastGpsPosition && this.isRunning) {
+                    const distance = this.calculateDistance(
+                        this.lastGpsPosition.coords.latitude,
+                        this.lastGpsPosition.coords.longitude,
+                        position.coords.latitude,
+                        position.coords.longitude
+                    );
+                    
+                    // Use GPS distance as reference for validation
+                    const timeDiff = (now - this.lastGpsPosition.timestamp) / 1000;
+                    if (timeDiff > 0 && distance > 0) {
+                        const gpsCalculatedSpeed = distance / timeDiff;
+                        this.validateAccelerometerSpeed(gpsCalculatedSpeed);
+                    }
+                }
+                
+                this.lastGpsPosition = {
+                    coords: position.coords,
+                    timestamp: now
+                };
+            }
+
+            calculateDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371000; // Earth's radius in meters
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                         Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                return R * c;
+            }
+
+            validateAccelerometerSpeed(gpsSpeed) {
+                const accelerometerSpeed = Math.abs(this.velocity);
+                const speedDifference = Math.abs(accelerometerSpeed - gpsSpeed);
+                const tolerance = Math.max(gpsSpeed * 0.3, 2.0); // 30% tolerance or 2 m/s minimum
+                
+                if (speedDifference > tolerance) {
+                    // Large discrepancy - apply correction
+                    const correctionFactor = gpsSpeed / Math.max(accelerometerSpeed, 0.1);
+                    this.velocity *= Math.min(Math.max(correctionFactor, 0.5), 2.0); // Limit correction
+                    this.velocityConfidence = Math.max(0, this.velocityConfidence - 0.2);
+                } else {
+                    // Good agreement - increase confidence
+                    this.velocityConfidence = Math.min(1.0, this.velocityConfidence + 0.1);
                 }
             }
 
@@ -699,11 +804,21 @@
                 // Use filtered acceleration magnitude
                 const acceleration = sensorData.filteredMagnitude || 0;
                 
+                // GPS-guided velocity correction
+                const gpsAge = (sensorData.timestamp - this.gpsLastUpdate) / 1000;
+                const gpsReliable = this.gpsAvailable && gpsAge < 2.0; // GPS data less than 2 seconds old
+                
                 // Only update velocity if we're actually moving
                 if (sensorData.isMoving && acceleration > this.motionThreshold) {
                     // Apply improved integration with drift correction
                     const velocityChange = acceleration * dt;
                     this.velocity += velocityChange;
+                    
+                    // GPS fusion - blend accelerometer and GPS velocities
+                    if (gpsReliable && this.gpsSpeed >= 0) {
+                        const gpsWeight = Math.min(0.3, this.velocityConfidence * 0.5); // Max 30% GPS influence
+                        this.velocity = (1 - gpsWeight) * this.velocity + gpsWeight * this.gpsSpeed;
+                    }
                     
                     // Add to velocity buffer for smoothing
                     this.velocityBuffer.push(this.velocity);
@@ -719,11 +834,23 @@
                         this.velocity = sortedVelocities[medianIndex];
                     }
                 } else if (!sensorData.isMoving) {
-                    // Gradual velocity decay when not moving
-                    this.velocity *= 0.9;
-                    if (Math.abs(this.velocity) < 0.1) {
-                        this.velocity = 0; // Zero out very small velocities
+                    // More aggressive velocity decay when not moving
+                    if (gpsReliable && this.gpsSpeed < 1.0) {
+                        // GPS confirms we're stationary - rapidly zero velocity
+                        this.velocity *= 0.5;
+                    } else {
+                        // Normal decay
+                        this.velocity *= 0.85;
                     }
+                    
+                    if (Math.abs(this.velocity) < 0.2) {
+                        this.velocity = 0; // Zero out small velocities
+                    }
+                }
+
+                // Additional drift correction - if GPS shows we're stopped, force zero
+                if (gpsReliable && this.gpsSpeed < 0.5 && Math.abs(this.velocity) > 2.0) {
+                    this.velocity *= 0.3; // Aggressive correction for large drift
                 }
 
                 // Ensure velocity is never negative (for drag racing)
@@ -742,11 +869,14 @@
 
                 // Add data to chart
                 const currentSpeed = this.isMetric ? speedKph : speedMph;
+                const gpsSpeedConverted = this.isMetric ? this.gpsSpeed * 3.6 : this.gpsSpeed * 2.237;
                 this.chartData.push({ 
                     time: timeElapsed, 
                     speed: currentSpeed, 
+                    gpsSpeed: gpsReliable ? gpsSpeedConverted : null,
                     acceleration: acceleration,
-                    isMoving: sensorData.isMoving 
+                    isMoving: sensorData.isMoving,
+                    confidence: this.velocityConfidence
                 });
                 
                 // Keep only last 30 seconds of data
@@ -755,6 +885,15 @@
                 // Update current speed display
                 const speedUnit = this.isMetric ? 'km/h' : 'mph';
                 this.elements.currentSpeed.textContent = `Speed: ${currentSpeed.toFixed(1)} ${speedUnit}`;
+                
+                // Update confidence display
+                const confidencePercent = Math.round(this.velocityConfidence * 100);
+                this.elements.confidenceStatus.textContent = `Confidence: ${confidencePercent}%`;
+                if (confidencePercent > 70) {
+                    this.elements.confidenceStatus.classList.add('status-active');
+                } else {
+                    this.elements.confidenceStatus.classList.remove('status-active');
+                }
 
                 // Check speed metrics
                 this.checkSpeedMetric('0-40kph', speedKph, 40);
@@ -946,7 +1085,7 @@
                 const maxTime = Math.max(...this.chartData.map(d => d.time));
                 const timeRange = Math.max(maxTime - minTime, 1); // Minimum range of 1 second
 
-                // Draw speed line
+                // Draw accelerometer speed line
                 ctx.strokeStyle = '#ff6b35';
                 ctx.lineWidth = 3;
                 ctx.beginPath();
@@ -964,11 +1103,42 @@
                 
                 ctx.stroke();
 
+                // Draw GPS speed line (if available)
+                const gpsData = this.chartData.filter(d => d.gpsSpeed !== null);
+                if (gpsData.length > 1) {
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([5, 5]); // Dashed line for GPS
+                    ctx.beginPath();
+                    
+                    gpsData.forEach((point, index) => {
+                        const x = ((point.time - minTime) / timeRange) * canvas.width;
+                        const y = canvas.height - (point.gpsSpeed / maxSpeed) * canvas.height;
+                        
+                        if (index === 0) {
+                            ctx.moveTo(x, y);
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    });
+                    
+                    ctx.stroke();
+                    ctx.setLineDash([]); // Reset to solid line
+                }
+
                 // Draw labels
                 ctx.fillStyle = '#fff';
                 ctx.font = '12px Arial';
                 ctx.fillText(`Max: ${maxSpeed.toFixed(1)} ${this.isMetric ? 'km/h' : 'mph'}`, 10, 20);
-                ctx.fillText(`Time: ${timeRange.toFixed(1)}s`, 10, canvas.height - 10);
+                ctx.fillText(`Time: ${timeRange.toFixed(1)}s`, 10, canvas.height - 30);
+                
+                // Legend
+                ctx.fillStyle = '#ff6b35';
+                ctx.fillText('■ Accelerometer', 10, canvas.height - 15);
+                if (gpsData.length > 0) {
+                    ctx.fillStyle = '#00ff00';
+                    ctx.fillText('■ GPS (dashed)', 120, canvas.height - 15);
+                }
             }
 
             saveRun() {
