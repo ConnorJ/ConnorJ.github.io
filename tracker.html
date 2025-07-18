@@ -71,6 +71,23 @@
             background: #ff6b35;
         }
 
+        .unit-toggle-small {
+            background: #333;
+            border: 2px solid #ff6b35;
+            color: #fff;
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            min-height: 32px;
+            width: auto;
+            margin-bottom: 10px;
+        }
+
+        .unit-toggle-small:active {
+            background: #ff6b35;
+        }
+
         .run-controls {
             display: flex;
             flex-direction: column;
@@ -102,6 +119,16 @@
 
         .sensor-display.missing:hover {
             background: #440000;
+        }
+
+        .sensor-display.connected {
+            background: #003300;
+            border-color: #00ff00;
+            color: #44ff44;
+        }
+
+        .sensor-display.connected:hover {
+            background: #004400;
         }
 
         .speed-display .sensor-display {
@@ -716,6 +743,12 @@
                 font-size: 10px;
                 padding: 6px 8px;
             }
+            
+            .unit-toggle-small {
+                font-size: 10px;
+                padding: 4px 8px;
+                margin-bottom: 8px;
+            }
         }
     </style>
 </head>
@@ -728,18 +761,17 @@
 
     <div class="main-layout">
         <div class="left-controls">
-            <button id="unitToggle" class="unit-toggle">Switch to Kilometers</button>
-            
             <div class="run-controls">
                 <button id="startBtn" class="btn btn-success">Start Run</button>
                 <button id="stopBtn" class="btn btn-danger hidden">Stop Run</button>
             </div>
             
-            <div id="sensorStatus" class="sensor-display">Sensor: Disconnected</div>
-            <div id="gpsStatus" class="sensor-display">GPS: Disconnected</div>
+            <div id="sensorStatus" class="sensor-display missing">Device Motion: Click to Enable</div>
+            <div id="gpsStatus" class="sensor-display missing">GPS: Click to Enable</div>
         </div>
         
         <div class="speed-display">
+            <button id="unitToggle" class="unit-toggle-small">Switch to Kilometers</button>
             <div id="currentSpeed" class="speed-sign">
                 <div class="speed-value">0</div>
                 <div class="speed-unit">mph</div>
@@ -1335,22 +1367,9 @@
             }
 
             updateSensorStatus() {
-                let statusText = `Sensor: ${this.sensorType}`;
-                if (this.gpsAvailable && this.sensorType !== 'Not Available') {
-                    statusText += ' + GPS ✓';
-                } else if (this.sensorType !== 'Not Available' && this.gpsPermissionRequested) {
-                    statusText += ' (GPS pending...)';
-                } else if (this.sensorType !== 'Not Available') {
-                    statusText += ' (GPS available)';
-                }
-                
-                this.elements.sensorStatus.textContent = statusText;
-                
-                if (this.sensorType !== 'Not Available') {
-                    this.elements.sensorStatus.classList.add('status-active');
-                } else {
-                    this.elements.sensorStatus.classList.remove('status-active');
-                }
+                // Sensor status is now handled by checkPermissions method
+                // Just trigger the permission check to update displays
+                this.checkPermissions();
             }
 
             requestGPSPermission() {
@@ -2487,29 +2506,36 @@
                 const hasLocation = this.gpsPermissionGranted;
                 const hasMotion = this.hasPermission && this.isCalibrated;
                 
-                // Update sensor status displays
+                // Update Device Motion sensor status
                 if (hasMotion) {
                     this.elements.sensorStatus.classList.remove('missing');
+                    this.elements.sensorStatus.classList.add('connected');
+                    this.elements.sensorStatus.textContent = 'Device Motion: Connected';
                 } else {
                     this.elements.sensorStatus.classList.add('missing');
+                    this.elements.sensorStatus.classList.remove('connected');
+                    this.elements.sensorStatus.textContent = 'Device Motion: Click to Enable';
                 }
                 
+                // Update GPS status
                 if (hasLocation) {
                     this.elements.gpsStatus.classList.remove('missing');
+                    this.elements.gpsStatus.classList.add('connected');
                     this.elements.gpsStatus.textContent = 'GPS: Connected';
                 } else {
                     this.elements.gpsStatus.classList.add('missing');
+                    this.elements.gpsStatus.classList.remove('connected');
                     this.elements.gpsStatus.textContent = 'GPS: Click to Enable';
                 }
                 
-                // Only show warning if permissions are actually missing
+                // Hide warning when BOTH permissions are granted, show when either is missing
                 if (hasLocation && hasMotion) {
                     this.elements.permissionsWarning.classList.add('hidden');
                 } else {
                     this.elements.permissionsWarning.classList.remove('hidden');
                     
                     let missingPermissions = [];
-                    if (!hasLocation) missingPermissions.push('Location Services');
+                    if (!hasLocation) missingPermissions.push('GPS');
                     if (!hasMotion) missingPermissions.push('Device Motion');
                     
                     const warningText = `For best accuracy, enable ${missingPermissions.join(' and ')}. Without these, measurements may be significantly less accurate.`;
