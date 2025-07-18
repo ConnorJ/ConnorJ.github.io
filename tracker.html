@@ -316,12 +316,80 @@
             margin: 15px auto 0;
         }
 
+        .reset-section {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            border-top: 1px solid #333;
+        }
+
+        .confirm-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .confirm-content {
+            background: #222;
+            border: 2px solid #dc3545;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 350px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .confirm-header {
+            color: #dc3545;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .confirm-message {
+            color: #fff;
+            margin-bottom: 25px;
+            line-height: 1.4;
+        }
+
+        .confirm-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .confirm-yes,
+        .confirm-no {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            min-width: 80px;
+        }
+
+        .confirm-yes {
+            background: #dc3545;
+            color: #fff;
+        }
+
+        .confirm-no {
+            background: #666;
+            color: #fff;
+        }
+
         .touch-locked {
             pointer-events: none;
         }
 
-        .touch-locked .btn-danger,
-        .touch-locked .btn[id="resetBtn"] {
+        .touch-locked .btn-danger {
             pointer-events: auto;
         }
 
@@ -428,10 +496,6 @@
         <button id="unitToggle" class="unit-toggle">Switch to Kilometers</button>
     </div>
 
-    <div id="permissionWarning" class="warning">
-        <button id="grantSensors" class="btn btn-primary">Grant Sensor Access</button>
-    </div>
-
     <div id="browserWarning" class="warning hidden"></div>
 
     <div class="status-bar">
@@ -446,10 +510,8 @@
     </div>
 
     <div class="controls">
-        <button id="calibrateBtn" class="btn">Calibrate</button>
         <button id="startBtn" class="btn btn-success">Start Run</button>
         <button id="stopBtn" class="btn btn-danger" disabled>Stop Run</button>
-        <button id="resetBtn" class="btn">Reset</button>
     </div>
 
     <div class="chart-container">
@@ -458,6 +520,10 @@
 
     <div class="metrics-grid" id="metricsGrid">
         <!-- Metrics will be populated by JavaScript -->
+    </div>
+
+    <div class="reset-section">
+        <button id="resetBtn" class="btn btn-danger">Reset All Data</button>
     </div>
 
     <div id="calibrationModal" class="calibration-modal hidden">
@@ -488,6 +554,19 @@
             <button class="history-close" onclick="tracker.closeHistoryModal()">Close</button>
         </div>
     </div>
+
+    <div id="confirmModal" class="confirm-modal hidden">
+        <div class="confirm-content">
+            <div class="confirm-header">Reset All Data?</div>
+            <div class="confirm-message">
+                This will permanently delete all your racing history and metrics. This action cannot be undone.
+            </div>
+            <div class="confirm-buttons">
+                <button class="confirm-no" onclick="tracker.closeConfirmModal()">Cancel</button>
+                <button class="confirm-yes" onclick="tracker.confirmReset()">Reset All</button>
+            </div>
+        </div>
+    </div>
     
     <script>
         class DragRacingTracker {
@@ -495,6 +574,7 @@
                 this.isMetric = false;
                 this.isCalibrated = false;
                 this.isRunning = false;
+                this.runStopped = false;
                 this.hasPermission = false;
                 this.sensorData = [];
                 this.metrics = {};
@@ -534,7 +614,6 @@
                 this.initMetrics();
                 this.initUI();
                 this.detectBrowser();
-                this.requestPermissions();
             }
 
             initMetrics() {
@@ -584,8 +663,6 @@
             initUI() {
                 this.elements = {
                     unitToggle: document.getElementById('unitToggle'),
-                    grantSensors: document.getElementById('grantSensors'),
-                    permissionWarning: document.getElementById('permissionWarning'),
                     browserWarning: document.getElementById('browserWarning'),
                     sensorStatus: document.getElementById('sensorStatus'),
                     currentSpeed: document.getElementById('currentSpeed'),
@@ -594,7 +671,6 @@
                     confidenceStatus: document.getElementById('confidenceStatus'),
                     calibrationStatus: document.getElementById('calibrationStatus'),
                     runStatus: document.getElementById('runStatus'),
-                    calibrateBtn: document.getElementById('calibrateBtn'),
                     startBtn: document.getElementById('startBtn'),
                     stopBtn: document.getElementById('stopBtn'),
                     resetBtn: document.getElementById('resetBtn'),
@@ -607,10 +683,13 @@
 
                 this.initEventListeners();
                 this.initChart();
-                this.initGPS();
                 this.initOrientation();
                 this.initWakeLock();
                 this.renderMetrics();
+                
+                // Initialize sensor status display
+                this.sensorType = 'Not Connected';
+                this.updateSensorStatus();
                 
                 // Start background wake lock preparation immediately
                 this.prepareWakeLock();
@@ -618,11 +697,9 @@
 
             initEventListeners() {
                 this.elements.unitToggle.addEventListener('click', () => this.toggleUnits());
-                this.elements.grantSensors.addEventListener('click', () => this.requestPermissions());
-                this.elements.calibrateBtn.addEventListener('click', () => this.startCalibration());
                 this.elements.startBtn.addEventListener('click', () => this.startRun());
                 this.elements.stopBtn.addEventListener('click', () => this.stopRun());
-                this.elements.resetBtn.addEventListener('click', () => this.resetAll());
+                this.elements.resetBtn.addEventListener('click', () => this.showResetConfirmation());
 
                 // Keep screen awake during runs
                 document.addEventListener('visibilitychange', () => {
@@ -735,51 +812,38 @@
                 }
             }
 
-            async requestPermissions() {
-                try {
-                    if ('DeviceMotionEvent' in window) {
-                        if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                            const permission = await DeviceMotionEvent.requestPermission();
-                            if (permission === 'granted') {
-                                this.hasPermission = true;
-                                this.elements.permissionWarning.classList.add('hidden');
-                                this.initSensors();
-                            }
-                        } else {
-                            this.hasPermission = true;
-                            this.elements.permissionWarning.classList.add('hidden');
-                            this.initSensors();
-                        }
-                    }
-                } catch (error) {
-                    console.error('Permission request failed:', error);
-                }
-            }
+
 
             initSensors() {
+                this.sensorType = 'None';
+                
                 if ('LinearAccelerationSensor' in window) {
                     try {
                         this.sensor = new LinearAccelerationSensor({ frequency: 100 });
                         this.sensor.addEventListener('reading', () => this.handleSensorReading());
                         this.sensor.addEventListener('error', () => this.fallbackToDeviceMotion());
                         this.sensor.start();
-                        this.elements.sensorStatus.textContent = 'Sensor: LinearAcceleration';
-                        this.elements.sensorStatus.classList.add('status-active');
+                        this.sensorType = 'LinearAcceleration';
+                        this.updateSensorStatus();
                     } catch (error) {
                         this.fallbackToDeviceMotion();
                     }
                 } else {
                     this.fallbackToDeviceMotion();
                 }
+                
+                // Initialize GPS automatically
+                this.initGPS();
             }
 
             fallbackToDeviceMotion() {
                 if (window.DeviceMotionEvent) {
                     window.addEventListener('devicemotion', (event) => this.handleDeviceMotion(event));
-                    this.elements.sensorStatus.textContent = 'Sensor: DeviceMotion + GPS';
-                    this.elements.sensorStatus.classList.add('status-active');
+                    this.sensorType = 'DeviceMotion';
+                    this.updateSensorStatus();
                 } else {
-                    this.elements.sensorStatus.textContent = 'Sensor: Not Available';
+                    this.sensorType = 'Not Available';
+                    this.updateSensorStatus();
                 }
             }
 
@@ -943,6 +1007,23 @@
                 document.body.style.transform = '';
             }
 
+            updateSensorStatus() {
+                let statusText = `Sensor: ${this.sensorType}`;
+                if (this.gpsAvailable && this.sensorType !== 'Not Available') {
+                    statusText += ' + GPS ✓';
+                } else if (this.sensorType !== 'Not Available') {
+                    statusText += ' (GPS pending...)';
+                }
+                
+                this.elements.sensorStatus.textContent = statusText;
+                
+                if (this.sensorType !== 'Not Available') {
+                    this.elements.sensorStatus.classList.add('status-active');
+                } else {
+                    this.elements.sensorStatus.classList.remove('status-active');
+                }
+            }
+
             initGPS() {
                 if ('geolocation' in navigator) {
                     const options = {
@@ -977,11 +1058,12 @@
                 
                 if (position.coords.speed !== null && position.coords.speed >= 0) {
                     this.gpsSpeed = position.coords.speed; // m/s
+                    const wasGpsAvailable = this.gpsAvailable;
                     this.gpsAvailable = true;
                     
-                    // Update sensor status to show GPS is active
-                    if (this.elements.sensorStatus.textContent.includes('DeviceMotion')) {
-                        this.elements.sensorStatus.textContent = 'Sensor: DeviceMotion + GPS ✓';
+                    // Update sensor status if GPS just became available
+                    if (!wasGpsAvailable) {
+                        this.updateSensorStatus();
                     }
                 }
                 
@@ -1081,7 +1163,7 @@
                 
                 this.sensorData.push(processedData);
 
-                if (this.isRunning) {
+                if (this.isRunning && !this.runStopped) {
                     this.updateMetrics(processedData);
                     this.updateChart();
                 }
@@ -1159,11 +1241,6 @@
             }
 
             async startCalibration() {
-                // Stop any running session before calibrating
-                if (this.isRunning) {
-                    this.stopRun();
-                }
-                
                 this.elements.calibrationModal.classList.remove('hidden');
                 this.elements.calibrationText.textContent = 'Keep device still...';
                 
@@ -1222,6 +1299,31 @@
             }
 
             async startRun() {
+                // Check and request permissions first
+                if (!this.hasPermission) {
+                    try {
+                        // Request device motion permission
+                        if ('DeviceMotionEvent' in window) {
+                            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                                const permission = await DeviceMotionEvent.requestPermission();
+                                if (permission !== 'granted') {
+                                    alert('Device motion permission is required for racing metrics');
+                                    return;
+                                }
+                            }
+                            this.hasPermission = true;
+                            this.initSensors();
+                        } else {
+                            alert('Device motion sensors are not available on this device');
+                            return;
+                        }
+                    } catch (error) {
+                        alert('Unable to access device sensors. Please check your browser settings.');
+                        return;
+                    }
+                }
+
+                // Auto-calibrate if needed
                 if (!this.isCalibrated) {
                     await this.startCalibration();
                     // Wait for calibration to complete
@@ -1243,6 +1345,7 @@
 
             beginRun() {
                 this.isRunning = true;
+                this.runStopped = false;
                 this.runStartTime = performance.now();
                 this.velocity = 0;
                 this.distance = 0;
@@ -1281,6 +1384,9 @@
                 
                 // Unlock touch interactions
                 document.body.classList.remove('touch-locked');
+
+                // Stop data collection and freeze chart
+                this.runStopped = true;
 
                 this.saveRun();
             }
@@ -1598,6 +1704,62 @@
                 document.getElementById('historyModal').classList.add('hidden');
             }
 
+            showResetConfirmation() {
+                document.getElementById('confirmModal').classList.remove('hidden');
+            }
+
+            closeConfirmModal() {
+                document.getElementById('confirmModal').classList.add('hidden');
+            }
+
+            confirmReset() {
+                // Clear all metric history
+                this.metricDefinitions.speed.forEach(metric => {
+                    metric.recent = null;
+                    metric.best = null;
+                    metric.history = [];
+                });
+                this.metricDefinitions.distance.forEach(metric => {
+                    metric.recent = null;
+                    metric.best = null;
+                    metric.history = [];
+                });
+
+                // Clear localStorage
+                localStorage.removeItem('dragRacingMetricHistory');
+                localStorage.removeItem('dragRacingRuns');
+                localStorage.removeItem('dragRacingBrowserOptimal');
+
+                // Stop any running session
+                if (this.isRunning) {
+                    this.stopRun();
+                }
+
+                // Reset all runtime variables
+                this.velocity = 0;
+                this.distance = 0;
+                this.chartData = [];
+                this.accelerationBuffer = [];
+                this.velocityBuffer = [];
+                this.isMoving = false;
+                this.stationaryTime = 0;
+                this.lastValidAcceleration = 0;
+                this.runDistanceAchievements = {};
+
+                // Reset speed sign display
+                const speedUnit = this.isMetric ? 'km/h' : 'mph';
+                this.elements.speedValue.textContent = '0';
+                this.elements.speedUnit.textContent = speedUnit;
+                this.elements.currentSpeed.classList.remove('moving');
+
+                // Update chart and metrics display
+                this.updateChart();
+                this.renderMetrics();
+
+                // Close confirmation modal
+                this.closeConfirmModal();
+            }
+
             toggleUnits() {
                 this.isMetric = !this.isMetric;
                 this.elements.unitToggle.textContent = this.isMetric ? 'Switch to Miles' : 'Switch to Kilometers';
@@ -1646,28 +1808,7 @@
 
 
 
-            resetAll() {
-                this.stopRun();
-                this.resetMetrics();
-                this.velocity = 0;
-                this.distance = 0;
-                this.chartData = [];
-                
-                // Reset filtering variables
-                this.accelerationBuffer = [];
-                this.velocityBuffer = [];
-                this.isMoving = false;
-                this.stationaryTime = 0;
-                this.lastValidAcceleration = 0;
-                
-                this.updateChart();
-                
-                // Reset speed sign display
-                const speedUnit = this.isMetric ? 'km/h' : 'mph';
-                this.elements.speedValue.textContent = '0';
-                this.elements.speedUnit.textContent = speedUnit;
-                this.elements.currentSpeed.classList.remove('moving');
-            }
+
 
             initChart() {
                 this.ctx = this.elements.chart.getContext('2d');
@@ -1740,7 +1881,7 @@
 
                 // Draw axis labels and values FIRST (so they're always visible)
                 ctx.fillStyle = '#ccc';
-                ctx.font = '10px Arial';
+                ctx.font = '12px Arial';
                 
                 // Y-axis labels (speed) on the right side
                 const speedSteps = 5;
@@ -1755,7 +1896,7 @@
                 
                 // Y-axis label (speed unit) on right
                 ctx.fillStyle = '#fff';
-                ctx.font = '11px Arial';
+                ctx.font = '13px Arial';
                 ctx.textAlign = 'center';
                 ctx.save();
                 ctx.translate(canvas.width - 10, chartArea.top + chartHeight / 2);
@@ -1765,7 +1906,7 @@
                 
                 // X-axis labels (time - seconds ago) on bottom
                 ctx.fillStyle = '#ccc';
-                ctx.font = '10px Arial';
+                ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
                 
                 const timeSteps = 6;
@@ -1780,14 +1921,14 @@
                 
                 // X-axis label (seconds ago) on bottom
                 ctx.fillStyle = '#fff';
-                ctx.font = '11px Arial';
+                ctx.font = '13px Arial';
                 ctx.textAlign = 'center';
                 ctx.fillText('Seconds Ago', chartArea.left + chartWidth / 2, canvas.height - 8);
                 
                 // Legend at top
                 ctx.textAlign = 'left';
                 ctx.fillStyle = '#ff6b35';
-                ctx.font = '10px Arial';
+                ctx.font = '12px Arial';
                 ctx.fillText('■ Accelerometer', chartArea.left, 20);
                 
                 // Draw data lines (if we have data)
@@ -1834,7 +1975,7 @@
                         
                         // GPS legend
                         ctx.fillStyle = '#00ff00';
-                        ctx.font = '10px Arial';
+                        ctx.font = '12px Arial';
                         ctx.fillText('■ GPS', chartArea.left + 100, 20);
                     }
                 }
