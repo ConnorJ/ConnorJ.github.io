@@ -224,98 +224,6 @@
             display: none !important;
         }
 
-        .metric-card {
-            transition: all 0.2s ease;
-        }
-
-        .metric-card.clickable {
-            cursor: pointer;
-        }
-
-        .metric-card.clickable:hover {
-            transform: scale(1.02);
-            border-color: #ff6b35;
-        }
-
-        .metric-card.not-clickable {
-            cursor: default;
-        }
-
-        .metric-recent {
-            font-size: 18px;
-            font-weight: bold;
-            color: #fff;
-        }
-
-        .metric-best {
-            font-size: 10px;
-            color: #00ff00;
-            margin-top: 3px;
-        }
-
-        .history-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.9);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-        }
-
-        .history-content {
-            background: #222;
-            border: 2px solid #ff6b35;
-            border-radius: 15px;
-            padding: 20px;
-            max-width: 400px;
-            max-height: 80vh;
-            overflow-y: auto;
-            width: 90%;
-        }
-
-        .history-header {
-            color: #ff6b35;
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-
-        .history-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .history-table th,
-        .history-table td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid #444;
-            color: #fff;
-            font-size: 12px;
-        }
-
-        .history-table th {
-            color: #ff6b35;
-            font-weight: bold;
-        }
-
-        .history-close {
-            background: #ff6b35;
-            color: #000;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            display: block;
-            margin: 15px auto 0;
-        }
-
         .touch-locked {
             pointer-events: none;
         }
@@ -463,29 +371,11 @@
     <div id="calibrationModal" class="calibration-modal hidden">
         <div class="modal-content">
             <h3>Sensor Calibration</h3>
-            <p>Hold device steady in a secure position for calibration & accurate data</p>
+            <p>Hold device steady for calibration</p>
             <div class="calibration-progress">
                 <div id="calibrationProgress" class="progress-bar"></div>
             </div>
             <p id="calibrationText">Keep device still...</p>
-        </div>
-    </div>
-
-    <div id="historyModal" class="history-modal hidden">
-        <div class="history-content">
-            <div id="historyHeader" class="history-header">Metric History</div>
-            <table class="history-table" id="historyTable">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Time</th>
-                        <th>Date</th>
-                    </tr>
-                </thead>
-                <tbody id="historyTableBody">
-                </tbody>
-            </table>
-            <button class="history-close" onclick="tracker.closeHistoryModal()">Close</button>
         </div>
     </div>
     
@@ -540,44 +430,24 @@
             initMetrics() {
                 this.metricDefinitions = {
                     speed: [
-                        { id: '0-40kph', label: '0-40 km/h', target: null, recent: null, best: null, history: [] },
-                        { id: '0-60kph', label: '0-60 km/h', target: null, recent: null, best: null, history: [] },
-                        { id: '0-80kph', label: '0-80 km/h', target: null, recent: null, best: null, history: [] },
-                        { id: '0-100kph', label: '0-100 km/h', target: null, recent: null, best: null, history: [] },
-                        { id: '0-120kph', label: '0-120 km/h', target: null, recent: null, best: null, history: [], conditional: true },
-                        { id: '0-200kph', label: '0-200 km/h', target: null, recent: null, best: null, history: [], conditional: true },
-                        { id: '0-30mph', label: '0-30 mph', target: null, recent: null, best: null, history: [] },
-                        { id: '0-60mph', label: '0-60 mph', target: null, recent: null, best: null, history: [] },
-                        { id: '60-100mph', label: '60-100 mph', target: null, recent: null, best: null, history: [], conditional: true },
-                        { id: '0-100mph', label: '0-100 mph', target: null, recent: null, best: null, history: [], conditional: true },
-                        { id: '0-150mph', label: '0-150 mph', target: null, recent: null, best: null, history: [], conditional: true }
+                        { id: '0-40kph', label: '0-40 km/h', target: null, achieved: false, value: null },
+                        { id: '0-60kph', label: '0-60 km/h', target: null, achieved: false, value: null },
+                        { id: '0-80kph', label: '0-80 km/h', target: null, achieved: false, value: null },
+                        { id: '0-100kph', label: '0-100 km/h', target: null, achieved: false, value: null },
+                        { id: '0-120kph', label: '0-120 km/h', target: null, achieved: false, value: null, conditional: true },
+                        { id: '0-200kph', label: '0-200 km/h', target: null, achieved: false, value: null, conditional: true },
+                        { id: '0-30mph', label: '0-30 mph', target: null, achieved: false, value: null },
+                        { id: '0-60mph', label: '0-60 mph', target: null, achieved: false, value: null },
+                        { id: '60-100mph', label: '60-100 mph', target: null, achieved: false, value: null, conditional: true },
+                        { id: '0-100mph', label: '0-100 mph', target: null, achieved: false, value: null, conditional: true },
+                        { id: '0-150mph', label: '0-150 mph', target: null, achieved: false, value: null, conditional: true }
                     ],
                     distance: [
-                        { id: '1000m', label: '1000m', target: '22.6s', recent: null, best: null, history: [] },
-                        { id: '1/8mile', label: '1/8 mile', target: '8.7s @ 97.6mph', recent: null, best: null, history: [] },
-                        { id: '1/4mile', label: '1/4 mile', target: '11.9s @ 116.2mph', recent: null, best: null, history: [] },
-                        { id: '1mile', label: '1 mile', target: '30.9s @ 161.6mph', recent: null, best: null, history: [], conditional: true }
+                        { id: '1000m', label: '1000m', target: null, achieved: false, value: null },
+                        { id: '1/8mile', label: '1/8 mile', target: null, achieved: false, value: null },
+                        { id: '1/4mile', label: '1/4 mile', target: null, achieved: false, value: null },
+                        { id: '1mile', label: '1 mile', target: null, achieved: false, value: null, conditional: true }
                     ]
-                };
-                
-                // Load saved history from localStorage
-                this.loadMetricHistory();
-                
-                // Track achieved speeds during a run
-                this.runAchievements = {
-                    speedTargets: {
-                        '0-40kph': { achieved: false, fromSpeed: 0 },
-                        '0-60kph': { achieved: false, fromSpeed: 0 },
-                        '0-80kph': { achieved: false, fromSpeed: 0 },
-                        '0-100kph': { achieved: false, fromSpeed: 0 },
-                        '0-120kph': { achieved: false, fromSpeed: 0 },
-                        '0-200kph': { achieved: false, fromSpeed: 0 },
-                        '0-30mph': { achieved: false, fromSpeed: 0 },
-                        '0-60mph': { achieved: false, fromSpeed: 0 },
-                        '60-100mph': { achieved: false, fromSpeed: 60 },
-                        '0-100mph': { achieved: false, fromSpeed: 0 },
-                        '0-150mph': { achieved: false, fromSpeed: 0 }
-                    }
                 };
             }
 
@@ -1247,15 +1117,7 @@
                 this.velocity = 0;
                 this.distance = 0;
                 this.chartData = [];
-                this.isNewRun = true;
-                
-                // Reset achievements for this run
-                Object.keys(this.runAchievements.speedTargets).forEach(key => {
-                    this.runAchievements.speedTargets[key].achieved = false;
-                });
-                
-                // Reset distance achievements
-                this.runDistanceAchievements = {};
+                this.resetMetrics();
 
                 this.elements.startBtn.disabled = true;
                 this.elements.stopBtn.disabled = false;
@@ -1422,32 +1284,10 @@
 
             checkSpeedMetric(id, currentSpeed, targetSpeed, fromSpeed = 0) {
                 const metric = this.metricDefinitions.speed.find(m => m.id === id);
-                const achievement = this.runAchievements.speedTargets[id];
-                
-                if (metric && achievement && !achievement.achieved && currentSpeed >= targetSpeed) {
+                if (metric && !metric.achieved && currentSpeed >= targetSpeed) {
                     const timeElapsed = (performance.now() - this.runStartTime) / 1000;
-                    const timeValue = timeElapsed.toFixed(2);
-                    
-                    // Mark as achieved for this run
-                    achievement.achieved = true;
-                    
-                    // Add to history
-                    const historyEntry = {
-                        time: parseFloat(timeValue),
-                        timeString: `${timeValue}s`,
-                        timestamp: new Date().toISOString(),
-                        dateString: new Date().toLocaleString()
-                    };
-                    
-                    metric.history.push(historyEntry);
-                    metric.recent = historyEntry.timeString;
-                    
-                    // Update best time
-                    const sortedHistory = [...metric.history].sort((a, b) => a.time - b.time);
-                    metric.best = sortedHistory[0].timeString;
-                    
-                    // Save to localStorage
-                    this.saveMetricHistory();
+                    metric.achieved = true;
+                    metric.value = `${timeElapsed.toFixed(2)}s`;
                     
                     // Audio feedback
                     this.playTone(800, 200);
@@ -1456,40 +1296,14 @@
 
             checkDistanceMetric(id, currentDistance, targetDistance, timeElapsed) {
                 const metric = this.metricDefinitions.distance.find(m => m.id === id);
-                
-                // Track if this distance was achieved in current run
-                if (!this.runDistanceAchievements) {
-                    this.runDistanceAchievements = {};
-                }
-                
-                if (metric && currentDistance >= targetDistance && !this.runDistanceAchievements[id]) {
+                if (metric && !metric.achieved && currentDistance >= targetDistance) {
+                    metric.achieved = true;
                     const speed = this.isMetric ? this.velocity * 3.6 : this.velocity * 2.237;
                     const unit = this.isMetric ? 'km/h' : 'mph';
-                    const timeValue = timeElapsed.toFixed(2);
-                    
-                    // Add to history
-                    const historyEntry = {
-                        time: parseFloat(timeValue),
-                        timeString: `${timeValue}s @ ${speed.toFixed(1)}${unit}`,
-                        timestamp: new Date().toISOString(),
-                        dateString: new Date().toLocaleString()
-                    };
-                    
-                    metric.history.push(historyEntry);
-                    metric.recent = historyEntry.timeString;
-                    
-                    // Update best time (fastest time)
-                    const sortedHistory = [...metric.history].sort((a, b) => a.time - b.time);
-                    metric.best = sortedHistory[0].timeString;
-                    
-                    // Save to localStorage
-                    this.saveMetricHistory();
+                    metric.value = `${timeElapsed.toFixed(2)}s @ ${speed.toFixed(1)}${unit}`;
                     
                     // Audio feedback
                     this.playTone(1000, 300);
-                    
-                    // Mark as achieved for this run
-                    this.runDistanceAchievements[id] = true;
                 }
             }
 
@@ -1513,91 +1327,6 @@
                 }
             }
 
-            loadMetricHistory() {
-                try {
-                    const saved = localStorage.getItem('dragRacingMetricHistory');
-                    if (saved) {
-                        const data = JSON.parse(saved);
-                        
-                        // Load speed metrics
-                        data.speed?.forEach(savedMetric => {
-                            const metric = this.metricDefinitions.speed.find(m => m.id === savedMetric.id);
-                            if (metric) {
-                                metric.history = savedMetric.history || [];
-                                metric.recent = savedMetric.recent;
-                                metric.best = savedMetric.best;
-                            }
-                        });
-                        
-                        // Load distance metrics
-                        data.distance?.forEach(savedMetric => {
-                            const metric = this.metricDefinitions.distance.find(m => m.id === savedMetric.id);
-                            if (metric) {
-                                metric.history = savedMetric.history || [];
-                                metric.recent = savedMetric.recent;
-                                metric.best = savedMetric.best;
-                            }
-                        });
-                    }
-                } catch (error) {
-                    console.warn('Error loading metric history:', error);
-                }
-            }
-
-            saveMetricHistory() {
-                try {
-                    const data = {
-                        speed: this.metricDefinitions.speed.map(m => ({
-                            id: m.id,
-                            history: m.history,
-                            recent: m.recent,
-                            best: m.best
-                        })),
-                        distance: this.metricDefinitions.distance.map(m => ({
-                            id: m.id,
-                            history: m.history,
-                            recent: m.recent,
-                            best: m.best
-                        }))
-                    };
-                    
-                    localStorage.setItem('dragRacingMetricHistory', JSON.stringify(data));
-                } catch (error) {
-                    console.warn('Error saving metric history:', error);
-                }
-            }
-
-            showHistoryModal(metricId) {
-                const allMetrics = [...this.metricDefinitions.speed, ...this.metricDefinitions.distance];
-                const metric = allMetrics.find(m => m.id === metricId);
-                
-                if (!metric || !metric.history.length) {
-                    // Silently do nothing if no history available
-                    return;
-                }
-                
-                // Sort history by time (fastest first)
-                const sortedHistory = [...metric.history].sort((a, b) => a.time - b.time);
-                
-                // Update modal content
-                document.getElementById('historyHeader').textContent = `${metric.label} History`;
-                
-                const tbody = document.getElementById('historyTableBody');
-                tbody.innerHTML = sortedHistory.map((entry, index) => `
-                    <tr>
-                        <td>${index + 1}</td>
-                        <td>${entry.timeString}</td>
-                        <td>${entry.dateString}</td>
-                    </tr>
-                `).join('');
-                
-                document.getElementById('historyModal').classList.remove('hidden');
-            }
-
-            closeHistoryModal() {
-                document.getElementById('historyModal').classList.add('hidden');
-            }
-
             toggleUnits() {
                 this.isMetric = !this.isMetric;
                 this.elements.unitToggle.textContent = this.isMetric ? 'Switch to Miles' : 'Switch to Kilometers';
@@ -1613,14 +1342,14 @@
                 this.renderMetrics();
             }
 
-                        renderMetrics() {
+            renderMetrics() {
                 const visibleMetrics = [...this.metricDefinitions.speed, ...this.metricDefinitions.distance]
                     .filter(metric => {
-                        if (metric.conditional && !metric.recent) {
-                            // Only show conditional metrics if they have been achieved at least once
-                            return false;
-                        }
-                        
+                        if (metric.conditional && !metric.achieved) {
+                            // Only show conditional metrics if achieved or close to achievement
+        return false;
+      }
+    
                         // Filter by unit system
                         if (this.isMetric) {
                             return !metric.label.includes('mph') && !metric.label.includes('mile');
@@ -1629,22 +1358,26 @@
                         }
                     });
 
-                this.elements.metricsGrid.innerHTML = visibleMetrics.map(metric => {
-                    const hasHistory = metric.history && metric.history.length > 0;
-                    const clickHandler = hasHistory ? `onclick="tracker.showHistoryModal('${metric.id}')"` : '';
-                    const clickableClass = hasHistory ? 'clickable' : 'not-clickable';
-                    
-                    return `
-                        <div class="metric-card ${metric.recent ? 'achieved' : ''} ${clickableClass}" ${clickHandler}>
-                            <div class="metric-label">${metric.label}</div>
-                            <div class="metric-recent">${metric.recent || '---'}</div>
-                            ${metric.best ? `<div class="metric-best">Best: ${metric.best}</div>` : '<div class="metric-best">No best time yet</div>'}
-                        </div>
-                    `;
-                }).join('');
+                this.elements.metricsGrid.innerHTML = visibleMetrics.map(metric => `
+                    <div class="metric-card ${metric.achieved ? 'achieved' : ''}">
+                        <div class="metric-label">${metric.label}</div>
+                        <div class="metric-value">${metric.value || '---'}</div>
+                        ${metric.target ? `<div class="metric-target">Target: ${metric.target}</div>` : ''}
+                    </div>
+                `).join('');
             }
 
-
+            resetMetrics() {
+                this.metricDefinitions.speed.forEach(metric => {
+                    metric.achieved = false;
+                    metric.value = null;
+                });
+                this.metricDefinitions.distance.forEach(metric => {
+                    metric.achieved = false;
+                    metric.value = null;
+                });
+                this.renderMetrics();
+            }
 
             resetAll() {
                 this.stopRun();
@@ -1856,10 +1589,8 @@
         }
 
         // Initialize app when page loads
-        let tracker;
         document.addEventListener('DOMContentLoaded', () => {
-            tracker = new DragRacingTracker();
-            window.tracker = tracker; // Make globally accessible for onclick handlers
+            const tracker = new DragRacingTracker();
         });
     </script>
     </body>
