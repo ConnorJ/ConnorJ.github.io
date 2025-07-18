@@ -32,27 +32,6 @@
             color: #ff6b35;
         }
 
-        .main-layout {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 20px;
-            align-items: flex-start;
-        }
-
-        .left-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            flex: 0 0 auto;
-        }
-
-        .speed-display {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
         .unit-toggle {
             background: #333;
             border: 2px solid #ff6b35;
@@ -62,28 +41,11 @@
             border-radius: 25px;
             cursor: pointer;
             min-height: 44px;
-            width: 200px;
+            margin-bottom: 10px;
         }
 
         .unit-toggle:active {
             background: #ff6b35;
-        }
-
-        .run-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .sensor-display {
-            background: #333;
-            padding: 8px 12px;
-            border-radius: 15px;
-            border: 1px solid #555;
-            font-size: 12px;
-            color: #fff;
-            text-align: center;
-            width: 200px;
         }
 
         .status-bar {
@@ -107,15 +69,10 @@
             white-space: nowrap;
         }
 
-                    .status-active {
-                border-color: #00ff00;
-                background: #003300;
-            }
-
-            .sensor-display.status-active {
-                border-color: #00ff00;
-                background: #003300;
-            }
+        .status-active {
+            border-color: #00ff00;
+            background: #003300;
+        }
 
         .controls {
             display: flex;
@@ -125,6 +82,7 @@
         }
 
         .btn {
+            flex: 1;
             padding: 15px;
             background: #333;
             border: 2px solid #ff6b35;
@@ -134,7 +92,7 @@
             border-radius: 8px;
             cursor: pointer;
             min-height: 44px;
-            width: 200px;
+            min-width: 100px;
         }
 
         .btn:active {
@@ -168,34 +126,6 @@
             margin-bottom: 20px;
             height: 300px;
             position: relative;
-        }
-
-        .chart-status-overlay {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 10;
-            pointer-events: none;
-        }
-
-        .chart-status {
-            background: rgba(0,0,0,0.8);
-            color: #fff;
-            padding: 8px 12px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-bottom: 5px;
-            border: 1px solid #555;
-        }
-
-        .chart-confidence {
-            background: rgba(0,0,0,0.8);
-            color: #ccc;
-            padding: 6px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            border: 1px solid #555;
         }
 
         #chart {
@@ -480,9 +410,9 @@
             background: #fff;
             color: #000;
             border: 4px solid #ff0000;
-            border-radius: 15px;
-            width: 120px;
-            height: 140px;
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -491,28 +421,20 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
             position: relative;
             flex-shrink: 0;
-            padding: 10px;
         }
 
         .speed-value {
-            font-size: 32px;
+            font-size: 24px;
             font-weight: 900;
             line-height: 1;
             color: #000;
         }
 
         .speed-unit {
-            font-size: 14px;
+            font-size: 10px;
             font-weight: bold;
             color: #666;
             margin-top: 2px;
-        }
-
-        .speed-confidence {
-            font-size: 10px;
-            color: #999;
-            margin-top: 4px;
-            text-align: center;
         }
 
         .speed-sign.moving {
@@ -559,16 +481,11 @@
             
             .speed-sign {
                 width: 70px;
-                height: 90px;
-                padding: 5px;
+                height: 70px;
             }
             
             .speed-value {
                 font-size: 20px;
-            }
-            
-            .speed-confidence {
-                font-size: 8px;
             }
         }
     </style>
@@ -576,35 +493,28 @@
 <body>
     <div class="header">
         <div class="title">Drag Racing Speed Tracker</div>
+        <button id="unitToggle" class="unit-toggle">Switch to Kilometers</button>
     </div>
 
     <div id="browserWarning" class="warning hidden"></div>
 
-    <div class="main-layout">
-        <div class="left-controls">
-            <button id="unitToggle" class="unit-toggle">Switch to Kilometers</button>
-            
-            <div class="run-controls">
-                <button id="startBtn" class="btn btn-success">Start Run</button>
-                <button id="stopBtn" class="btn btn-danger hidden">Stop Run</button>
-            </div>
-            
-            <div id="sensorStatus" class="sensor-display">Sensor: Disconnected</div>
+    <div class="status-bar">
+        <div id="sensorStatus" class="status-item">Sensor: Disconnected</div>
+        <div id="currentSpeed" class="speed-sign">
+            <div class="speed-value">0</div>
+            <div class="speed-unit">mph</div>
         </div>
-        
-        <div class="speed-display">
-            <div id="currentSpeed" class="speed-sign">
-                <div class="speed-value">0</div>
-                <div class="speed-unit">mph</div>
-                <div id="speedConfidence" class="speed-confidence">Confidence: 0%</div>
-            </div>
-        </div>
+        <div id="confidenceStatus" class="status-item">Confidence: 0%</div>
+        <div id="calibrationStatus" class="status-item">Calibration: Needed</div>
+        <div id="runStatus" class="status-item">Status: Standby</div>
+    </div>
+
+    <div class="controls">
+        <button id="startBtn" class="btn btn-success">Start Run</button>
+        <button id="stopBtn" class="btn btn-danger" disabled>Stop Run</button>
     </div>
 
     <div class="chart-container">
-        <div class="chart-status-overlay">
-            <div id="runStatus" class="chart-status">Status: Standby</div>
-        </div>
         <canvas id="chart"></canvas>
     </div>
 
@@ -759,7 +669,8 @@
                     currentSpeed: document.getElementById('currentSpeed'),
                     speedValue: document.querySelector('#currentSpeed .speed-value'),
                     speedUnit: document.querySelector('#currentSpeed .speed-unit'),
-                    confidenceStatus: document.getElementById('speedConfidence'),
+                    confidenceStatus: document.getElementById('confidenceStatus'),
+                    calibrationStatus: document.getElementById('calibrationStatus'),
                     runStatus: document.getElementById('runStatus'),
                     startBtn: document.getElementById('startBtn'),
                     stopBtn: document.getElementById('stopBtn'),
@@ -780,10 +691,6 @@
                 // Initialize sensor status display
                 this.sensorType = 'Not Connected';
                 this.updateSensorStatus();
-                
-                // Initialize button states
-                this.elements.startBtn.classList.remove('hidden');
-                this.elements.stopBtn.classList.add('hidden');
                 
                 // Start background wake lock preparation immediately
                 this.prepareWakeLock();
@@ -1280,8 +1187,6 @@
 
                 if (this.isRunning && !this.runStopped) {
                     this.updateMetrics(processedData);
-                } else if (this.isRunning && this.runStopped) {
-                    // Continue updating chart even when stopped to show real-time data collection
                     this.updateChart();
                 }
 
@@ -1474,14 +1379,6 @@
                 this.chartData = [];
                 this.isNewRun = true;
                 
-                // Reset processing variables for immediate chart response
-                this.accelerationBuffer = [];
-                this.velocityBuffer = [];
-                this.isMoving = false;
-                this.stationaryTime = 0;
-                this.lastValidAcceleration = 0;
-                this.lastTimestamp = 0;
-                
                 // Reset achievements for this run
                 Object.keys(this.runAchievements.speedTargets).forEach(key => {
                     this.runAchievements.speedTargets[key].achieved = false;
@@ -1490,11 +1387,8 @@
                 // Reset distance achievements
                 this.runDistanceAchievements = {};
 
-                // Clear chart immediately and show empty state
-                this.updateChart();
-
-                this.elements.startBtn.classList.add('hidden');
-                this.elements.stopBtn.classList.remove('hidden');
+                this.elements.startBtn.disabled = true;
+                this.elements.stopBtn.disabled = false;
                 this.elements.runStatus.textContent = 'Status: Recording';
                 this.elements.runStatus.classList.add('status-active');
 
@@ -1504,8 +1398,8 @@
 
             stopRun() {
                 this.isRunning = false;
-                this.elements.startBtn.classList.remove('hidden');
-                this.elements.stopBtn.classList.add('hidden');
+                this.elements.startBtn.disabled = false;
+                this.elements.stopBtn.disabled = true;
                 this.elements.runStatus.textContent = 'Status: Complete';
                 this.elements.runStatus.classList.remove('status-active');
 
@@ -1606,9 +1500,6 @@
                 
                 // Keep only last 30 seconds of data
                 this.chartData = this.chartData.filter(d => d.time > timeElapsed - 30);
-
-                // Always update chart when we have new data
-                this.updateChart();
 
                 // Update speed sign display
                 const speedUnit = this.isMetric ? 'km/h' : 'mph';
@@ -1864,10 +1755,6 @@
                 if (this.isRunning) {
                     this.stopRun();
                 }
-                
-                // Reset button states
-                this.elements.startBtn.classList.remove('hidden');
-                this.elements.stopBtn.classList.add('hidden');
 
                 // Reset all runtime variables
                 this.velocity = 0;
@@ -2066,7 +1953,7 @@
                 ctx.fillText('■ Accelerometer', chartArea.left, 20);
                 
                 // Draw data lines (if we have data)
-                if (this.chartData.length >= 1) {
+                if (this.chartData.length >= 2) {
                     // Draw accelerometer speed line
                     ctx.strokeStyle = '#ff6b35';
                     ctx.lineWidth = 3;
