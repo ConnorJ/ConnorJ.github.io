@@ -462,6 +462,62 @@
             color: #fff;
         }
 
+        .permissions-warning {
+            background: #2a1f00;
+            border: 2px solid #ff8c00;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #fff;
+        }
+
+        .permissions-warning.hidden {
+            display: none;
+        }
+
+        .warning-header {
+            color: #ff8c00;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .warning-content {
+            font-size: 12px;
+            line-height: 1.4;
+            margin-bottom: 15px;
+        }
+
+        .permission-links {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .permission-link {
+            color: #4a9eff;
+            text-decoration: none;
+            font-size: 11px;
+            padding: 8px 12px;
+            background: rgba(74, 158, 255, 0.1);
+            border-radius: 4px;
+            border: 1px solid rgba(74, 158, 255, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .permission-link:hover {
+            background: rgba(74, 158, 255, 0.2);
+            border-color: rgba(74, 158, 255, 0.5);
+        }
+
+        .permission-link::before {
+            content: "🔗 ";
+            margin-right: 4px;
+        }
+
         .touch-locked {
             pointer-events: none;
         }
@@ -616,6 +672,18 @@
             <div id="runStatus" class="chart-status">Status: Standby</div>
         </div>
         <canvas id="chart"></canvas>
+    </div>
+
+    <div id="permissionsWarning" class="permissions-warning">
+        <div class="warning-header">
+            ⚠️ Accuracy Warning
+        </div>
+        <div class="warning-content">
+            For best accuracy, enable both Location Services and Device Motion permissions. Without these, measurements may be significantly less accurate.
+        </div>
+        <div class="permission-links" id="permissionLinks">
+            <!-- Links will be populated by JavaScript based on device type -->
+        </div>
     </div>
 
     <div class="metrics-grid" id="metricsGrid">
@@ -778,7 +846,9 @@
                     metricsGrid: document.getElementById('metricsGrid'),
                     calibrationModal: document.getElementById('calibrationModal'),
                     calibrationProgress: document.getElementById('calibrationProgress'),
-                    calibrationText: document.getElementById('calibrationText')
+                    calibrationText: document.getElementById('calibrationText'),
+                    permissionsWarning: document.getElementById('permissionsWarning'),
+                    permissionLinks: document.getElementById('permissionLinks')
                 };
 
                 this.initEventListeners();
@@ -786,6 +856,7 @@
                 this.initOrientation();
                 this.initWakeLock();
                 this.renderMetrics();
+                this.initPermissionWarning();
                 
                 // Initialize sensor status display
                 this.sensorType = 'Not Connected';
@@ -2133,6 +2204,70 @@
                 if (runs.length > 10) runs.pop(); // Keep only last 10 runs
                 
                 localStorage.setItem('dragRacingRuns', JSON.stringify(runs));
+            }
+
+            initPermissionWarning() {
+                this.detectDeviceAndUpdateWarning();
+                this.checkPermissions();
+                
+                // Check permissions periodically
+                setInterval(() => {
+                    this.checkPermissions();
+                }, 5000);
+            }
+
+            detectDeviceAndUpdateWarning() {
+                const userAgent = navigator.userAgent.toLowerCase();
+                const isIOS = /iphone|ipad|ipod/.test(userAgent);
+                const isAndroid = /android/.test(userAgent);
+                
+                let links = '';
+                
+                if (isIOS) {
+                    links = `
+                        <a href="https://support.apple.com/en-us/102207" target="_blank" class="permission-link">
+                            How to enable Location Services on iPhone
+                        </a>
+                        <a href="https://support.apple.com/guide/iphone/control-access-to-motion-fitness-activity-iph8dd3c6ea5/ios" target="_blank" class="permission-link">
+                            How to enable Motion & Fitness on iPhone
+                        </a>
+                    `;
+                } else if (isAndroid) {
+                    links = `
+                        <a href="https://support.google.com/accounts/answer/3467281" target="_blank" class="permission-link">
+                            How to enable Location Services on Android
+                        </a>
+                        <a href="https://support.google.com/chrome/answer/114662" target="_blank" class="permission-link">
+                            How to manage site permissions in Chrome
+                        </a>
+                    `;
+                } else {
+                    links = `
+                        <a href="https://support.google.com/chrome/answer/114662" target="_blank" class="permission-link">
+                            How to manage site permissions in your browser
+                        </a>
+                    `;
+                }
+                
+                this.elements.permissionLinks.innerHTML = links;
+            }
+
+            checkPermissions() {
+                const hasLocation = this.gpsPermissionGranted;
+                const hasMotion = this.hasPermission && this.isCalibrated;
+                
+                if (hasLocation && hasMotion) {
+                    this.elements.permissionsWarning.classList.add('hidden');
+                } else {
+                    this.elements.permissionsWarning.classList.remove('hidden');
+                    
+                    let missingPermissions = [];
+                    if (!hasLocation) missingPermissions.push('Location Services');
+                    if (!hasMotion) missingPermissions.push('Device Motion');
+                    
+                    const warningText = `For best accuracy, enable ${missingPermissions.join(' and ')}. Without these, measurements may be significantly less accurate.`;
+                    this.elements.permissionsWarning.querySelector('.warning-content').textContent = warningText;
+                }
             }
         }
 
