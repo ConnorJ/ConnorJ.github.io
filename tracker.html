@@ -1717,15 +1717,22 @@
                         z: zValues[medianIndex]
                     };
                     
-                    // Reset processing buffers
-                    this.accelerationBuffer = [];
-                    this.velocityBuffer = [];
-                    this.velocity = 0;
-                    this.distance = 0;
-                    this.isMoving = false;
-                    this.stationaryTime = 0;
+                    // Only reset buffers if not currently running (to preserve confidence building)
+                    if (!this.isRunning) {
+                        this.accelerationBuffer = [];
+                        this.velocityBuffer = [];
+                        this.velocity = 0;
+                        this.distance = 0;
+                        this.isMoving = false;
+                        this.stationaryTime = 0;
+                    }
                     
                     this.isCalibrated = true;
+                    
+                    // Update status to Recording if a run is active
+                    if (this.isRunning) {
+                        this.elements.runStatus.textContent = 'Status: Recording';
+                    }
                 }
 
                 this.elements.calibrationModal.classList.add('hidden');
@@ -1762,23 +1769,12 @@
                     this.requestGPSPermission();
                 }
 
-                // Auto-calibrate if needed
+                // Start run immediately and calibrate simultaneously
+                this.beginRun();
+                
+                // Auto-calibrate if needed (but don't wait for it)
                 if (!this.isCalibrated) {
-                    await this.startCalibration();
-                    // Wait for calibration to complete
-                    return new Promise((resolve) => {
-                        const checkCalibration = () => {
-                            if (this.isCalibrated) {
-                                this.beginRun();
-                                resolve();
-                            } else {
-                                setTimeout(checkCalibration, 100);
-                            }
-                        };
-                        checkCalibration();
-                    });
-                } else {
-                    this.beginRun();
+                    this.startCalibration();
                 }
             }
 
@@ -1818,7 +1814,13 @@
 
                 this.elements.startBtn.classList.add('hidden');
                 this.elements.stopBtn.classList.remove('hidden');
-                this.elements.runStatus.textContent = 'Status: Recording';
+                
+                // Show calibrating status if not calibrated, otherwise recording
+                if (!this.isCalibrated) {
+                    this.elements.runStatus.textContent = 'Status: Calibrating...';
+                } else {
+                    this.elements.runStatus.textContent = 'Status: Recording';
+                }
                 this.elements.runStatus.classList.add('status-active');
 
                 // Request wake lock to keep screen awake
