@@ -1129,17 +1129,19 @@
                 this.elements.sensorStatus.addEventListener('click', () => this.handleSensorClick());
                 this.elements.gpsStatus.addEventListener('click', () => this.handleGpsClick());
 
-                // Keep screen awake during runs
+                // Keep screen awake during runs (non-blocking)
                 document.addEventListener('visibilitychange', () => {
-                    if (this.isRunning && document.hidden) {
-                        this.requestWakeLock();
+                    if (this.isRunning && !document.hidden) {
+                        // Restart keep alive when page becomes visible again
+                        this.startScreenKeepAlive();
                     }
                 });
 
                 // Handle page focus events
                 window.addEventListener('focus', () => {
                     if (this.isRunning) {
-                        this.requestWakeLock();
+                        // Restart keep alive when page gains focus
+                        this.startScreenKeepAlive();
                     }
                 });
 
@@ -1266,49 +1268,29 @@
             }
 
             initWakeLock() {
-                // Always setup wake lock - no user options
-                if ('wakeLock' in navigator) {
-                    console.log('Wake Lock API supported');
-                } else {
-                    console.log('Using fallback wake lock methods');
-                }
-                // Always setup fallback methods as backup
+                // Setup non-blocking screen keep alive system
+                this.screenKeepAliveInterval = null;
                 this.setupFallbackWakeLock();
             }
 
-            async requestWakeLock() {
-                try {
-                    // Release existing wake lock first
-                    if (this.wakeLock) {
-                        this.wakeLock.release();
-                        this.wakeLock = null;
-                    }
+            startScreenKeepAlive() {
+                console.log('Starting screen keep alive (non-blocking)');
+                
+                // Visual indicator
+                this.elements.runStatus.classList.add('wake-lock-active');
+                
+                // Use non-blocking method to keep screen alive
+                this.activateFallbackWakeLock();
+            }
 
-                    // Request new wake lock
-                    if ('wakeLock' in navigator) {
-                        this.wakeLock = await navigator.wakeLock.request('screen');
-                        console.log('Wake lock acquired');
-                        
-                        // Visual indicator
-                        this.elements.runStatus.classList.add('wake-lock-active');
-                        
-                        // Handle wake lock release
-                        this.wakeLock.addEventListener('release', () => {
-                            console.log('Wake lock released');
-                            this.elements.runStatus.classList.remove('wake-lock-active');
-                            // Re-request if still running
-                            if (this.isRunning) {
-                                setTimeout(() => this.requestWakeLock(), 1000);
-                            }
-                        });
-                    } else {
-                        // Fallback for older browsers
-                        this.activateFallbackWakeLock();
-                    }
-                } catch (err) {
-                    console.log('Wake lock not available, using fallback methods');
-                    this.activateFallbackWakeLock();
-                }
+            stopScreenKeepAlive() {
+                console.log('Stopping screen keep alive');
+                
+                // Remove visual indicator
+                this.elements.runStatus.classList.remove('wake-lock-active');
+                
+                // Stop the keep alive mechanism
+                this.deactivateFallbackWakeLock();
             }
 
             setupFallbackWakeLock() {
@@ -1360,6 +1342,22 @@
                 }, 15000); // Every 15 seconds
             }
 
+            deactivateFallbackWakeLock() {
+                // Stop video fallback
+                if (this.fallbackVideo) {
+                    this.fallbackVideo.pause();
+                }
+                
+                // Clear interval-based fallbacks
+                if (this.wakeLockInterval) {
+                    clearInterval(this.wakeLockInterval);
+                    this.wakeLockInterval = null;
+                }
+                
+                // Reset any DOM modifications
+                document.body.style.transform = '';
+            }
+
             startAlternativeWakeLock() {
                 // Even more aggressive fallback for devices that block video
                 if (this.wakeLockInterval) {
@@ -1404,26 +1402,7 @@
                 }
             }
 
-            releaseWakeLock() {
-                // Release official wake lock
-                if (this.wakeLock) {
-                    this.wakeLock.release();
-                    this.wakeLock = null;
-                }
 
-                // Stop fallback methods
-                if (this.fallbackVideo) {
-                    this.fallbackVideo.pause();
-                }
-
-                if (this.wakeLockInterval) {
-                    clearInterval(this.wakeLockInterval);
-                    this.wakeLockInterval = null;
-                }
-
-                // Reset body transform
-                document.body.style.transform = '';
-            }
 
             updateSensorStatus() {
                 // Sensor status is now handled by checkPermissions method
@@ -1683,7 +1662,7 @@
                 this.elements.calibrationText.textContent = 'Keep device still...';
                 
                 const calibrationData = [];
-                const calibrationTime = 3000; // 3 seconds
+                const calibrationTime = 4500; // 4.5 seconds
                 const startTime = performance.now();
 
                 const calibrationInterval = setInterval(() => {
@@ -1823,19 +1802,19 @@
                 }
                 this.elements.runStatus.classList.add('status-active');
 
-                // Request wake lock to keep screen awake
-                this.requestWakeLock();
+                // Keep screen awake without blocking touch
+                this.startScreenKeepAlive();
             }
 
             stopRun() {
                 this.isRunning = false;
                 this.elements.startBtn.classList.remove('hidden');
                 this.elements.stopBtn.classList.add('hidden');
-                this.elements.runStatus.textContent = 'Status: Complete';
+                this.elements.runStatus.textContent = 'Status: Stopped';
                 this.elements.runStatus.classList.remove('status-active');
 
-                // Release wake lock when run stops
-                this.releaseWakeLock();
+                // Stop keeping screen alive
+                this.stopScreenKeepAlive();
 
                 // Stop data collection and freeze chart
                 this.runStopped = true;
